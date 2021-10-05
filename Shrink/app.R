@@ -1,0 +1,1281 @@
+library(shiny)
+library(shinydashboard)
+library(plotly)
+library(tidyr)
+library(dplyr)
+library(rlang)
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(maps)
+library(shinyjs)
+library(fresh)
+
+# use the theme
+source("theme.R")
+
+jscode <- "var referer = document.referrer;
+           var n = referer.includes('economic');
+           var x = document.getElementsByClassName('logo');
+           if (n != true) {
+             x[0].innerHTML = '<a href=\"https://datascienceforthepublicgood.org/events/dspg2021/postersessions\">' +
+                              '<img src=\"DSPG_white-01.png\", alt=\"DSPG 2021 Symposium Proceedings\", style=\"height:42px;\">' +
+                              '</a>';
+                              
+           } else {
+             x[0].innerHTML = '<a href=\"https://datascienceforthepublicgood.org/economic-mobility/community-insights\">' +
+                              '<img src=\"AEMLogoGatesColors-11.png\", alt=\"Gates Economic Mobility Case Studies\", style=\"height:42px;\">' +
+                              '</a>';
+           }
+           "
+
+
+# Drive Time Analysis ----------------------------------------------------------------
+
+
+ia_counties <- map_data("county") %>% filter(region == "iowa")
+all_cities <-
+  read.csv("Total_City_Population_by_Year-with-estimate.csv")
+all_cities <- all_cities %>% separate(Primary.Point,
+                                      sep = "[ ()]+",
+                                      into = c("foo", "longitude", "latitude")) %>%
+  select(-foo) %>%
+  mutate(longitude = parse_number(longitude),
+         latitude = parse_number(latitude))
+# filter for cities that have 50,000 residents in any of the years
+hubs <- all_cities %>% dplyr::filter(Population >= 50000)
+# filter for cities that have 10,000 residents in any of the years
+hubs10 <- all_cities %>% dplyr::filter(Population >= 10000)
+
+
+# Levy Rates --------------------------------------------------------------
+
+
+#Levy Rates Iowa 2006 - 2020
+levy <- read.csv("levy-rates_totals-2006-2020.csv")
+levy$CITY.SIZE <- factor(levy$CITY.SIZE)
+levy$CITY.SIZE <-
+  reorder(levy$CITY.SIZE, levy$Population, na.rm = TRUE)
+levels(levy$CITY.SIZE)[4] <- "NANO- and MICROPOLITAN"
+
+# Dotplot of Iowa ----------------------------------------------------
+
+qol <- read.csv("qol_ISTP2014_x14.csv")
+
+levy_qol <- levy %>%
+  left_join(qol, by = c("FIPS_PL" = "FIPS_PL")) %>%
+  filter(Year >= 2010,
+         Year <= 2016)
+
+## obtain counties data for mapping
+ia_counties <- map_data("county") %>% filter(region == "iowa")
+
+## set the rows to be used as metrics - all continuous numerical values; will end up being the size of dots
+metrics <- c(
+  "Population",
+  "Levy.Rate",
+  "Adjusted.Amount",
+  "Per.Capita.Revenue",
+  "Per.Capita.Valuation",
+  "Fiscal.Effort",
+  "Fiscal.Capacity",
+  "miles50",
+  "min50",
+  "miles10",
+  "min10",
+  "miles25",
+  "min25",
+  "QOLjobs_i14",
+  "QOLmed_i14",
+  "QOLk12_i14",
+  "QOLhousing_i14",
+  "QOLgovt_i14",
+  "QOLchildsrv_i14",
+  "QOLseniorsrv_i14"
+)
+
+## set the rows to be used as colors of dots - if factor use discrete, if continuous use continuous
+fills <- c(
+  "CITY.SIZE",
+  "hub50",
+  "hub25",
+  "Population",
+  "Levy.Rate",
+  "Adjusted.Amount",
+  "Per.Capita.Revenue",
+  "Per.Capita.Valuation",
+  "Fiscal.Effort",
+  "Fiscal.Capacity",
+  "miles50",
+  "min50",
+  "miles10",
+  "min10",
+  "miles25",
+  "min25",
+  "QOLjobs_i14",
+  "QOLmed_i14",
+  "QOLk12_i14",
+  "QOLhousing_i14",
+  "QOLgovt_i14",
+  "QOLchildsrv_i14",
+  "QOLseniorsrv_i14"
+)
+
+
+# Measures of Crop Diversity  ---------------------------------------------------------
+
+ag_land <- read_csv("crop-diversity_metrics.csv") %>%
+  filter(div_metric == "ag_prop", year == 2014) %>%
+  rename("ag_prop_all" = value) %>%
+  select(-div_metric, -div_metric_nice)
+
+crop_mets <- read_csv("crop-metrics.csv") %>%
+  mutate(crop = str_to_title(crop),
+         crop = str_replace_all(crop, "_", " ")) %>%
+  filter(year == 2014)
+
+div_mets <- read_csv("crop-diversity_metrics.csv") %>%
+  filter(year == 2014) %>%
+  mutate(ag_prop_all = value) 
+#left_join(ag_land)
+
+MakeFakeFun <- function(dat = hiD, grid = 100) {
+  #dat <- crop_mets %>% filter(city_name == "Monroe")
+  f.dat <-
+    dat %>%
+    filter(!is.na(crop_prop),
+           crop_prop > 0)
+  #--repeat each crop by it's proportions to make 100 entries
+  cropType <- c()
+  #################
+  for (i in 1:nrow(f.dat)) {
+    #i <- 1
+    crop.tmp <- f.dat %>% slice(i) %>% pull(crop)
+    prop.tmp <- f.dat %>% slice(i) %>% pull(crop_prop)
+    cropType <- c(cropType,
+                  rep(crop.tmp, round(prop.tmp, 2) * grid))
+  }
+  ###############
+  len_cropType <- length(cropType)
+  fake_nums <- tibble(x =  rep(1:sqrt(grid), each = sqrt(grid)),
+                      y =  rep(1:sqrt(grid), times = sqrt(grid))) %>%
+    mutate(n = 1:n())
+  ##############
+  if (len_cropType == grid) {
+    dat_fake <-
+      tibble(crop = cropType) %>%
+      #--randomly assign it an x value between 1 and 100
+      mutate(n = sample(
+        seq(from = 1, to = grid, by = 1),
+        replace = F,
+        size =  grid
+      )) %>%
+      left_join(fake_nums) %>%
+      left_join(f.dat) %>%
+      select(-crop_prop)
+  } else {
+    if (len_cropType < grid) {
+      add_corn <- rep("corn", grid - len_cropType)
+      dat_fake <-
+        tibble(crop = c(cropType, add_corn)) %>%
+        #--randomly assign it an x value between 1 and 100
+        mutate(n = sample(
+          seq(
+            from = 1,
+            to = grid,
+            by = 1
+          ),
+          replace = F,
+          size =  grid
+        )) %>%
+        left_join(fake_nums) %>%
+        left_join(f.dat) %>%
+        select(-crop_prop)
+    } else {
+      #--if len_cropType > grid
+      dat_fake <-
+        tibble(crop = cropType[1:100]) %>%
+        #--randomly assign it an x value between 1 and 100
+        mutate(n = sample(
+          seq(
+            from = 1,
+            to = grid,
+            by = 1
+          ),
+          replace = F,
+          size =  grid
+        )) %>%
+        left_join(fake_nums) %>%
+        left_join(f.dat) %>%
+        select(-crop_prop)
+    }
+  }
+  return(dat_fake)
+}
+
+mx_shan_town <-
+  div_mets %>%
+  filter(div_metric == "shan_div_h") %>%
+  filter(value == max(value)) %>%
+  pull(city_name) %>%
+  unique()
+mx_shan_dat <-
+  MakeFakeFun(crop_mets %>%
+                filter(city_name == mx_shan_town), 100)
+min_shan_town <-
+  div_mets %>%
+  filter(div_metric == "shan_div_h") %>%
+  filter(value == min(value)) %>%
+  pull(city_name) %>%
+  unique()
+min_shan_dat <-
+  MakeFakeFun(crop_mets %>%
+                filter(city_name == min_shan_town), 100)
+viz_base <-
+  bind_rows(mx_shan_dat, min_shan_dat)
+
+
+
+# Quality of Life by Metrics ------------------------------------------------
+
+ds <- read.csv("correlation-dash.csv")
+
+ds$CITY.SIZE <- factor(ds$CITY.SIZE,
+                       levels = c("RURAL",
+                                  "RURAL PLUS",
+                                  "URBAN CLUSTER",
+                                  "MICROPOLITAN"))
+levels(ds$CITY.SIZE)[4] = "NANO- and MICROPOLITAN"
+
+ds <- ds %>%
+  select(-X) %>%
+  rename(
+    Jobs = QOLjobs_i14,
+    `Medical Services` = QOLmed_i14,
+    `Local Schools` = QOLk12_i14,
+    Housing = QOLhousing_i14,
+    `Local Government Services` = QOLgovt_i14,
+    `Child Care` = QOLchildsrv_i14,
+    `Senior Services` = QOLseniorsrv_i14,
+    `Ag Land Prop` = Proportion.of.land.dedicated.to.ag,
+    `Unique Crops` = Number.of.unique.crops.grown,
+    `Shannon Diversity` = Shannon.s.Diversity.Index,
+    `Shannon Evenness` = Shannon.s.Evenness.Index,
+    `Simpson Diversity` = Simpson.s.Diveristy.Index..Chance,
+    `Simpson Evenness` = Simpson.s.Evenness.Index,
+    `QoL Average` = QoL.Average
+  )
+
+indices <- c(
+  "Fiscal.Capacity",
+  "Fiscal.Effort",
+  "Ag Land Prop",
+  "Unique Crops",
+  "Shannon Diversity",
+  "Shannon Evenness",
+  "Simpson Diversity",
+  "Simpson Evenness",
+  "miles50",
+  "min50",
+  "miles10",
+  "min10",
+  "miles25",
+  "min25"
+)
+
+qol_metrics <- c(
+  "Jobs",
+  "Medical Services",
+  "Local Schools",
+  "Housing",
+  "Local Government Services",
+  "Child Care",
+  "Senior Services",
+  "QoL Average"
+)
+
+# Shiny Header --------------------------------------------------------------
+
+#header <- dashboardHeader()
+#  dashboardHeader(title = "Shrink Smarter Iowa", titleWidth = 600)
+header <- dashboardHeader(title = tags$a(href='http://ruralshrinksmart.org',
+                               tags$img(src='http://ruralshrinksmart.org/wp-content/uploads/2020/12/bckss-29.png')))
+
+
+# Sidebar -----------------------------------------------------------------
+
+
+sidebar <- dashboardSidebar(
+  sidebarMenu(
+    id = "tabs",
+    menuItem(
+      tabName = "overview",
+      text = "Project Overview",
+      icon = icon("info circle")
+    ),
+    menuItem(
+      text = "Dotplot of Iowa",
+      tabName = "Dotplot",
+      icon = icon("map-o")
+    ),
+    menuItem(
+      text = "Levy Rates of Cities",
+      tabName = "LevyCity",
+      icon = icon("line-chart")
+    ),
+    menuItem(
+      text = "City Comparison",
+      tabName = "Compare",
+      icon = icon("bar-chart-o")
+    ),
+    menuItem(
+      text = "Drive Time Analysis",
+      tabName = "DriveTime",
+      icon = icon("car")
+    ),
+    menuItem(
+      text = "Crop Diversity Map",
+      tabName = "CropDiversity",
+      icon = icon("map")
+    ),
+    menuItem(
+      text = " Crop Diversity Measures",
+      tabName = "CropMeasures",
+      icon = icon("seedling")
+    ),
+    menuItem(
+      text = "Quality of Life by Metrics",
+      tabName = "QoLMetrics",
+      icon = icon("heart")
+    ),
+    menuItem(
+      tabName = "team",
+      text = "The Shrink Smart Team",
+      icon = icon("user-friends")
+    )
+  )
+)
+
+
+# Body --------------------------------------------------------------------
+
+
+body <- dashboardBody(
+  useShinyjs(),
+  use_theme(mytheme),
+  
+  
+  # Overview Tab ------------------------------------------------------------
+  
+  tabItems(
+    tabItem(tabName = "overview",
+            fluidRow(
+              box(
+                title = "Project Overview",
+                closable = FALSE,
+                width = NULL,
+                status = "primary",
+                solidHeader = TRUE,
+                collapsible = TRUE,
+                h1("2021 DSPG Project Smart City Shrinkage"),
+                h2("Project Description"),
+                p(
+                  "While the state of Iowa has seen a gentle increase of about 0.4% in population, many of Iowa's smaller, more rural communities  have experienced significant population declines over the last few decades. "
+                ),
+                HTML(
+                  "<p>The <a href='https://smalltowns.soc.iastate.edu/iowa-small-town-poll/'>Iowa Small Town Poll</a> has been tracking quality of life in small towns all acros Iowa since 1994 and has established that a shrinking population is not automatically associated with a loss in the quality of life.</p>"
+                ),
+                p(
+                  "Our project focuses on factors affecting the perception of quality of life in small and shrinking rural communities in Iowa.  "
+                ),
+                div(
+                  align = "right",
+                  img(
+                    src = 'Iowa-population-change-2010-19.png',
+                    width = "45%",
+                    #  height = "430px",
+                    align = "right",
+                  ),
+                  HTML(
+                    "<p><em><strong>Fig.1 </strong>Change in population in Iowa's communities between 2010 and 2019. Red indicates a population loss of 2.5% or more, blue indicates a gain of 2.5% or more. The size of dots is indicative of population size.</em></p>"
+                  )
+                ),
+                div(
+                  plotlyOutput("plotly_loss", width = "45%", height = "300px"),
+                  HTML(
+                    "<p><em><strong>Fig.2 </strong>Boxplots of percent change in population between 2006 and 2019 in the rural towns of the Small Town Survey. Almost 75% percent of all the rural communities have experienced a loss in population, while only about half of the slightly larger communities (rural plus) have experienced a loss. </em></p>"
+                  )
+                ),
+                h2("Project Goals"),
+                p(
+                  "The goal of our project is to help communities focus their limited resources on improving quality of life rather than using scarce resources to try to grow (as this is unlikely in most towns)."
+                ),
+                h2("Our Approach"),
+                p(
+                  "The team has built a community information ecosystem that makes use of publicly available data and links it to some proprietary data sets to help communities understand, utilize, and collect new data about their towns and peer communities. The ecosystem uses statistical modelling and cutting-edge visualization strategies to make data more accessible to stakeholders in this community including city staff, local leaders, and the public."
+                ),
+                h2("Ethical Considerations"),
+                p(
+                  "The data used to create our ecosystem has been through the use of publicly available data. XXX list actual sources with as much detail as possible - include names and links"
+                )
+              )
+            ),),
+    
+    # Dotplot of Iowa ---------------------------------------------------------
+    
+    tabItem(
+      tabName = "Dotplot",
+      titlePanel(title = "Small towns of Iowa"),
+      fluidRow(box(
+        width = 10,
+        p(
+          "The dot map of Iowa below shows all communities that are part of the Small Town Survey.  Each dot corresponds to one of the 99 communities of the survey."
+        ),
+        HTML(
+          "The default dot color option is city size which is determined by population of the community.<br>
+          <p><strong>Rural</strong> cities have a population of fewer than <strong>800</strong> residents.<br>
+           Cities classified as <strong>Rural Plus</strong> have <strong>between 800 and 2,499</strong> residents. <br>
+           <strong>Urban Cluster</strong> communities are defined as having <strong>between 2,500 and 4,999</strong> residents. <br>
+          <strong>Nano- and Micropolitan</strong> cities have a population of <strong>more than 5000</strong>.</p>"),
+        p(
+          "Selecting a variable in the dropdown menu on the left will change the size of dots to represent the values according to the variable. Smaller sized dots represent a lower value, while bigger dots show higher values.  "
+        ),
+        p("Hover over points for additional information on each community."),
+        HTML(
+          "<p align='right'>Source: <em>Population data from the American Community Survey (ACS) US Census Bureau 2010 – 2016.</em></p>"
+        )
+      )),
+      fluidRow(
+        box(
+          width = 3,
+          selectInput("Year2", "Select Year:",
+                      choices = levels(factor(levy_qol$Year))),
+          varSelectInput("metric", "Select Dot Size:",
+                         data = levy_qol[metrics]),
+          varSelectInput("fills", "Select Dot Color:",
+                         data = levy_qol[fills])
+        ),
+        box(
+          plotlyOutput("mapPlot", width = 0.75 * 1100, height = 0.75 * 700),
+          #width = 5,
+          status = "primary"
+        )
+      )
+    ),
+    # width = 1500,
+    # height = 750))),
+    
+    
+    # Levy Plot ---------------------------------------------------------------
+    
+    tabItem(
+      tabName = "LevyCity",
+      titlePanel(title = "Levy Rates in Iowa 2006 - 2020"),
+      fluidRow(box(
+        width = 12,
+        p(
+          "A levy rate is another term for tax rate. In Iowa the General Fund Levy for all cities is capped at $8.10, if the total levy rate is higher than that there is a specific purpose, such as; debt repayment, city improvements, and emergencies."
+        ),
+        p(
+          "The line graph is a tool to compare tax rates with other communities of like sizes. How high or low a levy/tax rate is can be an indicator of fiscal health of a community."
+        ),
+        p(
+          "Hovering over with cursor shows year, city name, and it's value. Source: Iowa Department of Management 2006 - 2020."
+        ),
+        HTML(
+          "<p align='right'>Source: <em>Levy Rates data from Iowa Department of Management 2006 – 2020.</em></p>"
+        )
+      )),
+      fluidRow(
+        box(
+          width = 4,
+          selectInput(
+            "which_cities",
+            "Choose a City",
+            selected = "All",
+            choices = c("All", unique(levy$CITY.NAME)),
+            multiple = TRUE
+          ),
+          selectInput(
+            "which_variable",
+            "Choose a dependent variable",
+            selected = "Adjusted.Amount",
+            choices = c(
+              "Population",
+              "Adjusted.Amount",
+              "Levy.Rate",
+              "Prop.Tax.Revenue",
+              "Fiscal.Capacity",
+              "Fiscal.Effort"
+            )
+          ),
+          multiple = FALSE
+        ),
+        box(plotlyOutput("plotly", height = 1000))
+      )
+    ),
+    
+    
+    # City Comparison ---------------------------------------------------------
+    
+    tabItem(
+      tabName = "Compare",
+      titlePanel(title = "Compare Fiscal Capacity and Fiscal Effort"),
+      fluidRow(box(
+        width = 12,
+        p(
+          "The bar graph below focuses on fiscal capacity and fiscal effort. Cities with higher fiscal capacity and lower fiscal effort tend to be more economically comfortable, while cities with lower fiscal capacity and higher fiscal effort typically have more economic stress."
+        ),
+        p(
+          "Fiscal Capacity is shown in pink and fiscal effort is shown in blue. The graphs can be adjusted by year."
+        ),
+        p(" By selecting two cities in the dropdown menu, the bar graph will adjust to a side-by-side comparison of a city's fiscal capacity and effort."),
+        HTML(
+          "<p align='right'>Source: <em>Fiscal Effort and Capacity derived from data by the Iowa Department of Management 2006 – 2020.</em></p>"
+        )
+      )),
+      fluidRow(
+        box(
+          width = 4,
+          selectInput("Year", "Select Year:",
+                      choices = unique(levy$Year)),
+          selectInput("City1", "Select City 1:",
+                      choices = levels(factor(levy$CITY.NAME))),
+          selectInput("City2", "Select City 2:",
+                      choices = levels(factor(levy$CITY.NAME)))
+        ),
+        box(
+          plotOutput("ComparePlot"),
+          width = 6,
+          status = "primary"
+        )
+      )
+    ),
+    
+    
+    # Drive Time Analysis -------------------------------------------------------------
+    
+    tabItem(
+      tabName = "DriveTime",
+      titlePanel(title = "Drive Times from each of the 99 Communities to the closest Metropolitan Statistical Area (MSA)"),
+      fluidRow(box(
+        width = 12,
+        p(
+          "This drive time analysis focuses on a necessity of rural Iowans: cars. Drive times are featured from the 99 communities to the closest Metropolitan Statistical Area (MSA) to gain an understanding of how long an Iowan from one of the 99 Communities has to drive in order access certain resources. "
+        ),
+        p(
+          "Each colored point corresponds to a community in Iowa. Hubs are sized according to their population.
+            Filled dots indicate that a community is within 50 mins driving distance to the closest MSA or micro MSA. "
+        ),
+        p("Hover over points for additional information on each community."),
+        HTML(
+          "<p align='right'>Source: <em>(micro)MSA defined by the US Census Bureau based on the 2010 Decennial Census.</em></p>"
+        ),
+        HTML(
+          "<p align='right'> <em>Drive times between locations are estimated and accessed through the Google developer API.</em></p>"
+        )
+      )),
+      fluidRow(
+        box(
+          width = 3,
+          selectInput("msa", "Select Hub Size:",
+                      choices = c("Metropolitan Statistical Area (MSA)", "Micropolitan Statistical Area (µMSA)"))
+        ),
+        tabBox(
+          title = "",
+          width = 9,
+          side = "right",
+          tabPanel("Economic Hubs"),
+          
+          plotlyOutput("LevyMapPlotly", height = 700)
+          #    tabPanel("Nearest Hospital"),
+          #    tabPanel("Housing Hubs")
+        )
+      )
+    ),
+    
+    # ArcGis Crop Diversity Map ---------------------------------------------------------------
+    
+    
+    tabItem(
+      tabName = "CropDiversity",
+      titlePanel(title = "Map of Crops Grown in Iowa for 2020"),
+      fluidRow(box(
+        width = 12,
+        p(
+          "The ArcGIS map below shows the type of crops grown across Iowa. Agriculture is an important sector in Iowa and the types of crops shows [XXX] "
+        ),
+        p(
+          "On the left is a legend of all the crops shown on the graph. Each blue circle represent a radius of XXX around one of the 99 communities.
+          The most popular crops grown are corn and soybeans in yellow and dark green respectively. "
+        ),
+        p("Zoom in and out to gain a more descriptive picture.")
+      )),
+      fluidRow(mainPanel(tabsetPanel(
+        type = "tabs",
+        tabPanel("Arc",
+                 br(),
+                 htmlOutput("arcFrame"))
+      )))
+    ),
+    
+    # Measures of Crop Diversity ----------------------------------------------
+    
+    
+    tabItem(
+      tabName = "CropMeasures",
+      titlePanel(title = "Measures for Crop Diversity"),
+      fluidRow(box(
+        width = 12,
+        p(
+          "The lollipop chart and map of Iowa are shown to gain a further understanding of crop diversity in the 99 communities."
+        ),
+        p(
+          "The left showcases a lollipop chart that displays the type of crops grown in a 5 mile radius around the city selected.
+          On the right displays a dot map, with each dot representing one of the 99 communites. Different plots can be selected by choosing a crop diversity metric which changes color by light to dark as highest to lowest."
+        ),
+        p(
+          "Begin by choosing a city or clicking on a dot on the map. Each dot is interactive and provides further information by hovering over with cursor."
+        )
+      )),
+      fluidRow(column(width = 4,
+                      box(
+                        width = NULL,
+                        selectInput(
+                          "which_city_cropdiv",
+                          "Choose a City",
+                          selected = "Monroe",
+                          choices = c(unique(crop_mets$city_name)),
+                          multiple = FALSE
+                        )
+                      )),
+               column(
+                 width = 4,
+                 offset = 2,
+                 box(
+                   width = NULL,
+                   selectInput(
+                     "which_divmet",
+                     "Choose a Diversity Metric",
+                     selected = "Shannon's Evenness Index",
+                     choices = c(unique(div_mets$div_metric_nice)),
+                     multiple = FALSE
+                   )
+                 )
+               )),
+      fluidRow(column(
+        width = 6,
+        box(
+          plotlyOutput("plotly_cropdiv", height = 500),
+          width = NULL,
+          status = "primary"
+        )
+      ),
+      column(
+        width = 6,
+        box(
+          plotlyOutput("plotly_divmet", width = 900, height = 500),
+          width = NULL,
+          status = "primary"
+        )
+      )),
+      # fluidRow(column(
+      #   width = 12,
+      #   box(
+      #     width = NULL,
+      #     selectInput(
+      #       "which_city_viz",
+      #       "Choose a City",
+      #       selected = "Monroe",
+      #       choices = c(unique(crop_mets$city_name)),
+      #       multiple = FALSE
+      #     ),
+      #     #        )),
+      #     # column(width = 10,
+      #     #        box(
+      #     plotOutput("plot_viz", height = 900)
+      #     # width = NULL
+      #   )
+      # ))
+    ),
+    
+    
+    # Quality of Life by Metrics ----------------------------------------------
+    
+    
+    tabItem(
+      tabName = "QoLMetrics",
+      titlePanel(title = "Quality of Life by Metrics"),
+      fluidRow(box(
+        width = 12,
+        p(
+          "The Scatterplot below displays a dot for each of the communities in the Small Town Survey." 
+        ),
+        p(
+          "Select a demographic for the community that will be plotted on the X-axis and a Quality of Life Index to plot on the Y-axis. Year only applies when plotting Fiscal Capacity or Fiscal Effort. 
+          The Pearson-Spearman correlation between the two variables is then displayed along with a line of best fit."
+        ),
+        p("Hover over the dots for more details on which community is being plotted and the values of the selected metric and index."),
+        HTML(
+          "<p align='right'>Source: <em>MSA defined by the US Census Bureau based on the 2010 Decennial Census.</em></p>"
+        ),
+        HTML(
+          "<p align='right'> <em>Fiscal Metrics by Iowa Department of Management 2010 - 2016.</em></p>"
+        )
+      )),
+      fluidRow(
+        box(
+          width = 4,
+          selectInput("Year3", "Select Year:",
+                      choices = levels(factor(ds$Year))),
+          varSelectInput("fiscal", "Select Community Demographic:",
+                         data = ds[indices]),
+          varSelectInput("qol", "Select Quality of Life (QoL) Index:",
+                         data = ds[qol_metrics]),
+          textOutput("qolCorrelation")
+        ),
+        box(plotlyOutput(
+          "scatPlot", width = 800, height = 700
+        ))
+      )
+    ),
+    
+    # Team Tab ----------------------------------------------------------------
+    
+    
+    tabItem(tabName = "team",
+            fluidRow(
+              box(
+                title = "Our Team",
+                closable = FALSE,
+                width = NULL,
+                status = "primary",
+                solidHeader = TRUE,
+                collapsible = TRUE,
+                h2("DSPG Team Members"),
+                fluidRow(
+                  box(
+                    width = 2,
+                    img(
+                      src = 'laailah.png',
+                      width = "150px",
+                      height = "150px"
+                    ),
+                    p("Laailah Ali, DSPG Young Scholar, Economics")
+                  ),
+                  box(
+                    width = 2,
+                    img(
+                      src = 'max.png',
+                      width = "150px",
+                      height = "150px"
+                    ),
+                    p("Max Ruehle, DSPG Young Scholar, Statistics")
+                  ),
+                  box(
+                    width = 2,
+                    img(
+                      src = 'jack.png',
+                      width = "150px",
+                      height = "150px"
+                    ),
+                    p("Jack Studier, DSPG Young Scholar, Urban Planning")
+                  ),
+                  box(
+                    width = 2,
+                    img(
+                      src = 'amanda.png',
+                      width = "150px",
+                      height = "150px"
+                    ),
+                    p("Amanda Rae, DSPG Graduate Fellow, Sociology")
+                  ),
+                  box(
+                    width = 2,
+                    img(
+                      src = 'gina.png',
+                      width = "150px",
+                      height = "150px"
+                    ),
+                    p("Dr. Gina Nichols, DSPG Advisor, Agronomy")
+                  ),
+                  box(
+                    width = 2,
+                    img(
+                      src = 'heike.png',
+                      width = "150px",
+                      height = "150px"
+                    ),
+                    p(
+                      "Dr. Heike Hofmann, Professor of Statistics and Professor in Charge of the Data Science Program"
+                    )
+                  )
+                ),
+                h2("Project Sponsors and Advisors"),
+                fluidRow(box(
+                  width = 2,
+                  img(
+                    src = 'kimberly.png',
+                    width = "150px",
+                    height = "150px"
+                  ),
+                  HTML(
+                    "<p>Dr. Kimberly Zarecor, Professor of Architecture, PI of <a href='https://scc.design.iastate.edu/2020/07/01/nsf-funds-new-research-phase-with-a-1-5-million-grant/'>NSF award 1952007
+SCC-IRG Track 2: Overcoming the Rural Data Deficit to Improve Quality of Life and Community Services in Smart & Connected Small Communities</a></p>"
+                  )
+                ),
+                box(
+                  width = 2,
+                  img(
+                    src = 'biswa.png',
+                    width = "150px",
+                    height = "150px"
+                  ),
+                  p(
+                    "Dr. Biswa Das, Associate Professor, Community and Regional Planning
+Director of Graduate Education, Community and Regional Planning"
+                  )
+                )),
+                h2("Acknowledgements"),
+                p(
+                  ""
+                )
+              )
+            ))
+  )
+)
+
+# ui ----------------------------------------------------------------------
+
+
+ui <- dashboardPage(header, sidebar, body)
+
+
+# Server ------------------------------------------------------------------
+
+
+server <- function(input, output, session) {
+  # Run JavaScript Code
+  runjs(jscode)
+  
+  
+  levy_sub <- reactive({
+    cities <- input$which_cities
+    if ("All" %in% cities)
+      cities <- unique(levy$CITY.NAME)
+    levy %>% #filter(Tax.Type == "TOTALS") %>%
+      filter(CITY.NAME %in% cities)
+  })
+  y <- reactive({
+    levy_sub()[, input$which_variable]
+  })
+  
+  # Population Loss in Rural Iowa ---------------------------------------------------------
+  
+  output$plotly_loss <- renderPlotly({
+    foo <- levy %>%
+      filter(CITY.SIZE %in% c("RURAL", "RURAL PLUS")) %>%
+      filter(Year <= 2019) %>%
+      group_by(CITY.SIZE, CITY.NAME) %>% nest() %>%
+      summarize(
+        m = data %>% purrr::map(
+          .f = function(d)
+            lm(Population ~ Year, d)
+        ),
+        population = data %>% purrr::map_dbl(
+          .f = function(d)
+            d$Population[d$Year == 2006]
+        )
+      )
+    
+    foo <- foo %>% mutate(rate = m %>% purrr::map_dbl(
+      .f = function(mod)
+        coef(mod)[2]
+    ))
+    
+    
+    gg <-
+      foo %>% ggplot(aes(
+        x = CITY.SIZE,
+        y = rate / population * 100,
+        label = CITY.NAME
+      )) + geom_boxplot() + coord_flip() +
+      ylab("Percent Population Change") + xlab("")
+    
+    ggplotly(gg)
+  })
+  
+  # Dotplot of Iowa ---------------------------------------------------------
+  
+  
+  output$mapPlot <- renderPlotly({
+    tryCatch(
+      expr = {
+        ggplotly(
+          ia_counties %>%
+            ggplot(aes(x = long, y = lat)) +
+            geom_path(aes(group = group), colour = "grey30") +
+            geom_point(
+              data = (levy_qol %>% filter(Year == input$Year2) %>% distinct()),
+              aes(
+                x = longitude,
+                y = latitude,
+                size = !!input$metric,
+                color = !!input$fills,
+                text = paste("City:", CITY.NAME, "\n",!!input$fills)
+              )
+            ) +
+            theme_map() +
+            scale_color_viridis_d(begin = 0, end = 0.8) +
+            theme(legend.text = element_text(size = 12)),
+          tooltip = c("text", "size")
+        ) %>%
+          layout(legend = list(
+            x = -0.25 ,
+            y = 1,
+            face = "bold"
+          ))
+      },
+      error = function(e) {
+        ggplotly(
+          ia_counties %>%
+            ggplot(aes(x = long, y = lat)) +
+            geom_path(aes(group = group), colour = "black") +
+            geom_point(
+              data = (levy_qol %>% filter(Year == input$Year2) %>% distinct()),
+              aes(
+                x = longitude,
+                y = latitude,
+                size = !!input$metric,
+                color = !!input$fills,
+                text = paste("City:", CITY.NAME, "\n",!!input$fills)
+              )
+            ) +
+            theme_map() +
+            scale_color_viridis_c(begin = 0, end = 0.8) +
+            theme(
+              legend.title = element_text(size = 12, face = "bold"),
+              legend.text = element_text(size = 10, face = "bold")
+            ),
+          tooltip = c("text", "size")
+        )
+      }
+    )
+  })
+  
+  # Levy Plot ---------------------------------------------
+  
+  
+  output$plotly <- renderPlotly({
+    levy_sub() %>%
+      ggplot(aes(x = Year, y = y())) +
+      geom_line(aes(group = CITY.NAME)) +
+      facet_grid(CITY.SIZE ~ ., scales = "free_y") +
+      ylab(input$which_variable)
+    print(plotly::ggplotly())
+  })
+  
+  # City Comparison  ---------------------------------------------------------
+  
+  
+  output$ComparePlot <- renderPlot({
+    levy %>%
+      filter(Year == input$Year,
+             CITY.NAME == input$City1 |
+               CITY.NAME == input$City2) %>%
+      select(CITY.NAME, Year, Fiscal.Effort, Fiscal.Capacity) %>%
+      pivot_longer(3:4, names_to = "Type", values_to = "Value") %>%
+      ggplot(aes(x = CITY.NAME,
+                 y = Value,
+                 fill = Type)) +
+      geom_col(color = "black", position = "dodge") +
+      scale_fill_brewer(palette = "Pastel1") +
+      xlab("City") +
+      ylab("Index Value") +
+      theme_stata()
+  })
+  
+  
+  
+  
+  # Drive Time Analysis -------------------------------------
+  
+  
+  output$LevyMapPlotly <- renderPlotly({
+    gg1 <- levy %>%
+      mutate(`Commute ≥ 50 mins` = min50 >= 50) %>%
+      filter(Year == 2020) %>%
+      ggplot(aes(x = longitude, y = latitude)) +
+      geom_path(aes(x = long,
+                    y = lat,
+                    group = subregion),
+                data = ia_counties,
+                colour = "grey70") +
+      geom_point(aes(size = Population,
+                     colour = MSA),
+                 data = hubs,
+                 alpha = 0.4) +
+      geom_point(aes(
+        label = CITY.NAME,
+        colour = MSA,
+        shape = `Commute ≥ 50 mins`
+      ),
+      size = 3) +
+      #  geom_point(aes(colour="small cities")) +
+      theme_bw() +
+      scale_size(range = c(5, 10), guide = NULL) +
+      scale_shape_manual("50 min or more Commute", values = c(19, 1)) +
+      scale_colour_brewer("Hub and influence region", palette = "Paired") +
+      ggthemes::theme_map() +
+      theme(legend.position = "none")
+    
+    gg2 <- levy %>%
+      mutate(`Commute ≥ 50 mins` = hub_min >= 50) %>%
+      filter(Year == 2020) %>%
+      ggplot(aes(x = longitude, y = latitude)) +
+      geom_path(aes(x = long,
+                    y = lat,
+                    group = subregion),
+                data = ia_counties,
+                colour = "grey70") +
+      geom_point(aes(size = Population,
+                     colour = microMSA),
+                 data = hubs10,
+                 alpha = 0.4) +
+      geom_point(aes(
+        label = CITY.NAME,
+        colour = microMSA,
+        shape = `Commute ≥ 50 mins`
+      ),
+      size = 3) +
+      #  geom_point(aes(colour="small cities")) +
+      theme_bw() +
+      scale_size(range = c(5, 10), guide = NULL) +
+      scale_shape_manual("50 min or more Commute", values = c(19, 1)) +
+      #  scale_colour_brewer("Hub and influence region", palette = "Paired") +
+      ggthemes::theme_map() +
+      theme(legend.position = "none")
+    
+    if (input$msa == "Micropolitan Statistical Area (µMSA)")
+      print(plotly::ggplotly(gg2))
+    else 
+      print(plotly::ggplotly(gg1))
+  })
+  
+  # ArcGIS Crop Diversiy Map -----------------------------------------------------
+  
+  
+  output$arcFrame <- renderUI({
+    HTML(
+      '
+    <style>
+      .embed-container {
+        position: relative;
+        padding-bottom: 80%;
+        height: 0;
+        max-width: 100%;
+      }
+    </style>
+    <iframe
+        width="2000"
+        height="1000"
+        frameborder="0"
+        scrolling="no"
+        marginheight="0"
+        marginwidth="0"
+        title="provPrepTest"
+        src="https://www.arcgis.com/apps/mapviewer/index.html?webmap=5c70b9b3088c4b8d885417ddee5bf4ee
+">
+    </iframe>
+'
+    )
+  })
+  
+  # Measures of Crop Diversity -------------------------------------------------
+  
+  
+  
+  #Crop Diversity Lollipop
+  crop_sub <- reactive({
+    crop_mets %>%
+      filter(city_name == input$which_city_cropdiv)
+  })
+  output$plotly_cropdiv <- renderPlotly({
+    ggplotly(
+      crop_sub() %>%
+        filter(crop_prop > 0) %>%
+        arrange(crop_prop) %>%
+        mutate(crop = fct_inorder(crop)) %>%
+        ggplot(aes(crop, crop_prop)) +
+        geom_point(aes(
+          size = crop_prop,
+          text = paste(round(crop_prop * 100, 1), "%")
+        )) +
+        geom_segment(aes(
+          xend = crop, y = 0, yend = crop_prop
+        )) +
+        coord_flip() +
+        scale_y_continuous(
+          labels = scales::label_percent(),
+          limits = c(0, 1)
+        ) +
+        labs(y = "Percentage of Ag Land",
+             x = NULL) +
+        theme_stata() +
+        theme(axis.text.y = element_text(angle = 0)),
+      tooltip = c("text")
+    )
+  })
+  
+  ###Landscape Diversity Map
+  observe({
+    d <- event_data("plotly_click", source = "plotly_divmet")
+    if (!is.null(d)) {
+      which_city = as.character(unlist(div_sub()[d$pointNumber + 1, "city_name"]))
+      
+      updateSelectInput(session, "which_city_cropdiv", selected = which_city)
+    }
+  })
+  
+  
+  div_sub <- reactive({
+    #    browser()
+    div_mets %>%
+      filter(div_metric_nice == input$which_divmet)
+  })
+  
+  
+  output$plotly_divmet <- renderPlotly({
+    ggplotly(
+      source = "plotly_divmet",
+      ia_counties %>%
+        ggplot(aes(x = long, y = lat)) +
+        geom_path(aes(group = group), colour = "grey30") +
+        geom_point(
+          data = div_sub(),
+          size = 10,
+          #color = "black",
+          #pch = 21,
+          aes(
+            x = longitude,
+            y = latitude,
+            #size = value,
+            color = value,
+            text = paste(
+              "City name:",
+              city_name,
+              "\n",
+              "2020 Population:",
+              round(population, 0),
+              "\n",
+              "Land in Ag:",
+              round(ag_prop_all * 100, 0),
+              "%",
+              "\n",
+              "Value:",
+              round(value, 2)
+            )
+          )
+        ) +
+        labs(color = str_wrap(input$which_divmet), 5) +
+        theme_map() +
+        scale_color_viridis_c(option = "inferno") +
+        theme(legend.text = element_text(size = 12)),
+      tooltip = c("text", "size")
+    ) %>%
+      layout(legend = list(
+        x = -0.25 ,
+        y = 1,
+        face = "bold"
+      ))
+  })
+  
+  # Diversity Metric Viz
+  viz_reac <- reactive({
+    bind_rows(viz_base,
+              MakeFakeFun(crop_mets %>%
+                            filter(city_name == input$which_city_viz), 100))
+  })
+  
+  
+  # output$plot_viz <- renderPlot({
+  #   
+  #   #div_mets2 <- div_mets %>% filter(div_metric == "shan_div_h")
+  #   
+  #   viz_reac() %>%
+  #     left_join(div_mets) %>%
+  #     filter(!is.na(city_name)) %>%
+  #     mutate(value = round(value, 2)) %>%
+  #     arrange(value) %>%
+  #     mutate(city_name2 = paste(city_name, ",\n Shannon Div Index =", value),
+  #            city_name2 = fct_inorder(city_name2)) %>%
+  #     mutate(crop = ifelse(crop == "Corn", "Corn/Soybeans",
+  #                          ifelse(
+  #                            crop == "Soybeans", "Corn/Soybeans",
+  #                            "Other"))) %>%
+  #     ggplot(aes(x = x, y = y)) +
+  #     geom_tile(aes(fill = crop)) +
+  #     scale_fill_manual(values = c("Corn/Soybeans" = "gold3",
+  #                                  "Other" = "gray20")) +
+  #     facet_grid(~city_name2) +
+  #     theme_stata()  +
+  #     labs(fill = NULL,
+  #          x = NULL,
+  #          y = NULL) +
+  #     theme(axis.text.x = element_blank(),
+  #           axis.text.y = element_blank(),
+  #           axis.ticks.x = element_blank(),
+  #           axis.ticks.y = element_blank())
+  # })
+  # 
+  # Quality of Life by Metrics ----------------------------------------------
+  output$qolCorrelation <- renderText({
+    subds <- ds %>%
+      filter(Year == input$Year3,
+             Fiscal.Capacity < 500)
+    correlation <- cor(
+      x = subds %>% select(input$fiscal),
+      y = subds %>% select(input$qol),
+      use = "pairwise"
+    )
+    
+    sprintf(
+      "The Pearson-Spearman correlation between the selected variables is %.4f.",
+      correlation
+    )
+  })
+  
+  output$scatPlot <- renderPlotly({
+    ggplotly(
+      ds %>%
+        filter(Year == input$Year3,
+               Fiscal.Capacity < 500) %>%
+        ggplot(
+          aes(
+            x = !!input$fiscal,
+            y = !!input$qol,
+            color = CITY.SIZE,
+            text = paste("City:", CITY.NAME)
+          )
+        ) +
+        geom_point() +
+        scale_color_viridis_d(begin = 0, end = 0.8) +
+        theme(legend.text = element_text(size = 12)) +
+        geom_smooth(
+          aes(group = 1),
+          colour = "grey70",
+          method = "lm",
+          se = FALSE
+        ),
+      tooltip = c("text", "x", "y")
+    ) %>%
+      layout(legend = list(
+        x = -0.25 ,
+        y = 1,
+        face = "bold"
+      ))
+  })
+  
+}
+
+shinyApp(ui = ui, server = server)

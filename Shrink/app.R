@@ -377,7 +377,7 @@ body <- dashboardBody(
                 status = "primary",
                 solidHeader = TRUE,
                 collapsible = TRUE,
-                h1("2021 DSPG Project Smart City Shrinkage"),
+                h1("2021 DSPG Project Iowa Shrink Smart Communities"),
                 h2("Project Description"),
                 p(
                   "While the state of Iowa has seen a gentle increase of about 0.4% in population, many of Iowa's smaller, more rural communities  have experienced significant population declines over the last few decades. "

@@ -32,8 +32,6 @@ jscode <- "var referer = document.referrer;
 
 # Drive Time Analysis ----------------------------------------------------------------
 
-
-ia_counties <- map_data("county") %>% filter(region == "iowa")
 all_cities <-
   read.csv("Total_City_Population_by_Year-with-estimate.csv")
 all_cities <- all_cities %>% separate(Primary.Point,
@@ -50,25 +48,10 @@ hubs10 <- all_cities %>% dplyr::filter(Population >= 10000)
 
 # Levy Rates --------------------------------------------------------------
 
-
-#Levy Rates Iowa 2006 - 2020
-levy <- read.csv("levy-rates_totals-2006-2020.csv")
-levy$CITY.SIZE <- factor(levy$CITY.SIZE)
-levy$CITY.SIZE <-
-  reorder(levy$CITY.SIZE, levy$Population, na.rm = TRUE)
-levels(levy$CITY.SIZE)[4] <- "NANO- and MICROPOLITAN"
+#Base Dataset 2006 - 2020
+levy <- read.csv("levy_all.csv")
 
 # Dotplot of Iowa ----------------------------------------------------
-
-qol <- read.csv("qol_ISTP2014_x14.csv")
-
-levy_qol <- levy %>%
-  left_join(qol, by = c("FIPS_PL" = "FIPS_PL")) %>%
-  filter(Year >= 2010,
-         Year <= 2016)
-
-## obtain counties data for mapping
-ia_counties <- map_data("county") %>% filter(region == "iowa")
 
 ## set the rows to be used as metrics - all continuous numerical values; will end up being the size of dots
 metrics <- c(
@@ -120,6 +103,11 @@ fills <- c(
   "QOLchildsrv_i14",
   "QOLseniorsrv_i14"
 )
+
+levy_qol <- levy %>%
+  select(Year, CITY.NAME, longitude, latitude, fills, metrics) %>%
+  filter(Year >= 2010,
+         Year <= 2016)
 
 
 # Measures of Crop Diversity  ---------------------------------------------------------
@@ -394,7 +382,7 @@ body <- dashboardBody(
                     src = 'Iowa-population-change-2010-19.png',
                     width = "45%",
                     #  height = "430px",
-                    align = "right",
+                    align = "right"
                   ),
                   HTML(
                     "<p><em><strong>Fig.1 </strong>Change in population in Iowa's communities between 2010 and 2019. Red indicates a population loss of 2.5% or more, blue indicates a gain of 2.5% or more. The size of dots is indicative of population size.</em></p>"
@@ -419,7 +407,7 @@ body <- dashboardBody(
                   "The data used to create our ecosystem has been through the use of publicly available data. XXX list actual sources with as much detail as possible - include names and links"
                 )
               )
-            ),),
+            )),
     
     # Dotplot of Iowa ---------------------------------------------------------
     
@@ -912,7 +900,7 @@ server <- function(input, output, session) {
     tryCatch(
       expr = {
         ggplotly(
-          ia_counties %>%
+          map_data("county") %>% filter(region == "iowa") %>%
             ggplot(aes(x = long, y = lat)) +
             geom_path(aes(group = group), colour = "grey30") +
             geom_point(
@@ -938,7 +926,7 @@ server <- function(input, output, session) {
       },
       error = function(e) {
         ggplotly(
-          ia_counties %>%
+          map_data("county") %>% filter(region == "iowa") %>%
             ggplot(aes(x = long, y = lat)) +
             geom_path(aes(group = group), colour = "black") +
             geom_point(
@@ -1009,7 +997,7 @@ server <- function(input, output, session) {
       geom_path(aes(x = long,
                     y = lat,
                     group = subregion),
-                data = ia_counties,
+                data = map_data("county") %>% filter(region == "iowa"),
                 colour = "grey70") +
       geom_point(aes(size = Population,
                      colour = MSA),
@@ -1036,7 +1024,7 @@ server <- function(input, output, session) {
       geom_path(aes(x = long,
                     y = lat,
                     group = subregion),
-                data = ia_counties,
+                data = map_data("county") %>% filter(region == "iowa"),
                 colour = "grey70") +
       geom_point(aes(size = Population,
                      colour = microMSA),
@@ -1148,7 +1136,7 @@ server <- function(input, output, session) {
   output$plotly_divmet <- renderPlotly({
     ggplotly(
       source = "plotly_divmet",
-      ia_counties %>%
+      map_data("county") %>% filter(region == "iowa") %>%
         ggplot(aes(x = long, y = lat)) +
         geom_path(aes(group = group), colour = "grey30") +
         geom_point(

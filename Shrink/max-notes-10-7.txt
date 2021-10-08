@@ -1,0 +1,20 @@
+Sets:
+
+37. all_cities <- read.csv("Total_City_Population_by_Year-with-estimate.csv")
+
+55. levy <- read.csv("levy-rates_totals-2006-2020.csv")
+
+63. qol <- read.csv("qol_ISTP2014_x14.csv")
+
+127. ag_land <- read_csv("crop-diversity_metrics.csv")
+
+132. crop_mets <- read_csv("crop-metrics.csv")
+
+137. div_mets <- read_csv("crop-diversity_metrics.csv")
+
+241. ds <- read.csv("correlation-dash.csv")
+
+
+levy needs:
+- All QOL metrics + average value (corr/qol_ISTP2014_x14.csv)
+- All Ag metrics (corr/crop-diversity_metrics.csv)

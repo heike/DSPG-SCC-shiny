@@ -35,3 +35,17 @@ levy_all <- levy_corr %>%
 
 
 write.csv(levy_all, file = "levy_all.csv")
+
+
+
+## cleaning all_cities
+
+all_cities <- read.csv("Total_City_Population_by_Year-with-estimate.csv")
+all_cities <- all_cities %>% separate(Primary.Point,
+                                      sep = "[ ()]+",
+                                      into = c("foo", "longitude", "latitude")) %>%
+  select(-foo) %>%
+  mutate(longitude = parse_number(longitude),
+         latitude = parse_number(latitude))
+
+write.csv(all_cities, "Total_City_Population_by_Year-with-estimate_new.csv")

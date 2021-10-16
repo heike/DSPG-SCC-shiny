@@ -26,25 +26,10 @@ jscode <- "var referer = document.referrer;
              x[0].innerHTML = '<a href=\"https://datascienceforthepublicgood.org/economic-mobility/community-insights\">' +
                               '<img src=\"AEMLogoGatesColors-11.png\", alt=\"Gates Economic Mobility Case Studies\", style=\"height:42px;\">' +
                               '</a>';
-           }
-           "
-
+           }"
 
 # Drive Time Analysis ----------------------------------------------------------------
-
-all_cities <-
-  read.csv("Total_City_Population_by_Year-with-estimate.csv")
-all_cities <- all_cities %>% separate(Primary.Point,
-                                      sep = "[ ()]+",
-                                      into = c("foo", "longitude", "latitude")) %>%
-  select(-foo) %>%
-  mutate(longitude = parse_number(longitude),
-         latitude = parse_number(latitude))
-# filter for cities that have 50,000 residents in any of the years
-hubs <- all_cities %>% dplyr::filter(Population >= 50000)
-# filter for cities that have 10,000 residents in any of the years
-hubs10 <- all_cities %>% dplyr::filter(Population >= 10000)
-
+all_cities <- read.csv("Total_City_Population_by_Year-with-estimate_new.csv")
 
 # Levy Rates --------------------------------------------------------------
 
@@ -125,17 +110,15 @@ crop_mets <- read_csv("crop-metrics.csv") %>%
 div_mets <- read_csv("crop-diversity_metrics.csv") %>%
   filter(year == 2014) %>%
   mutate(ag_prop_all = value) 
-#left_join(ag_land)
 
 MakeFakeFun <- function(dat = hiD, grid = 100) {
-  #dat <- crop_mets %>% filter(city_name == "Monroe")
   f.dat <-
     dat %>%
     filter(!is.na(crop_prop),
            crop_prop > 0)
   #--repeat each crop by it's proportions to make 100 entries
   cropType <- c()
-  #################
+
   for (i in 1:nrow(f.dat)) {
     #i <- 1
     crop.tmp <- f.dat %>% slice(i) %>% pull(crop)
@@ -143,12 +126,12 @@ MakeFakeFun <- function(dat = hiD, grid = 100) {
     cropType <- c(cropType,
                   rep(crop.tmp, round(prop.tmp, 2) * grid))
   }
-  ###############
+
   len_cropType <- length(cropType)
   fake_nums <- tibble(x =  rep(1:sqrt(grid), each = sqrt(grid)),
                       y =  rep(1:sqrt(grid), times = sqrt(grid))) %>%
     mutate(n = 1:n())
-  ##############
+
   if (len_cropType == grid) {
     dat_fake <-
       tibble(crop = cropType) %>%
@@ -450,9 +433,6 @@ body <- dashboardBody(
         )
       )
     ),
-    # width = 1500,
-    # height = 750))),
-    
     
     # Levy Plot ---------------------------------------------------------------
     
@@ -503,7 +483,6 @@ body <- dashboardBody(
       )
     ),
     
-    
     # City Comparison ---------------------------------------------------------
     
     tabItem(
@@ -540,7 +519,6 @@ body <- dashboardBody(
       )
     ),
     
-    
     # Drive Time Analysis -------------------------------------------------------------
     
     tabItem(
@@ -576,14 +554,11 @@ body <- dashboardBody(
           tabPanel("Economic Hubs"),
           
           plotlyOutput("LevyMapPlotly", height = 700)
-          #    tabPanel("Nearest Hospital"),
-          #    tabPanel("Housing Hubs")
         )
       )
     ),
     
     # ArcGis Crop Diversity Map ---------------------------------------------------------------
-    
     
     tabItem(
       tabName = "CropDiversity",
@@ -608,7 +583,6 @@ body <- dashboardBody(
     ),
     
     # Measures of Crop Diversity ----------------------------------------------
-    
     
     tabItem(
       tabName = "CropMeasures",
@@ -666,30 +640,10 @@ body <- dashboardBody(
           width = NULL,
           status = "primary"
         )
-      )),
-      # fluidRow(column(
-      #   width = 12,
-      #   box(
-      #     width = NULL,
-      #     selectInput(
-      #       "which_city_viz",
-      #       "Choose a City",
-      #       selected = "Monroe",
-      #       choices = c(unique(crop_mets$city_name)),
-      #       multiple = FALSE
-      #     ),
-      #     #        )),
-      #     # column(width = 10,
-      #     #        box(
-      #     plotOutput("plot_viz", height = 900)
-      #     # width = NULL
-      #   )
-      # ))
+      ))
     ),
     
-    
     # Quality of Life by Metrics ----------------------------------------------
-    
     
     tabItem(
       tabName = "QoLMetrics",
@@ -729,7 +683,6 @@ body <- dashboardBody(
     ),
     
     # Team Tab ----------------------------------------------------------------
-    
     
     tabItem(tabName = "team",
             fluidRow(
@@ -835,12 +788,9 @@ Director of Graduate Education, Community and Regional Planning"
 
 # ui ----------------------------------------------------------------------
 
-
 ui <- dashboardPage(header, sidebar, body)
 
-
 # Server ------------------------------------------------------------------
-
 
 server <- function(input, output, session) {
   # Run JavaScript Code
@@ -894,7 +844,6 @@ server <- function(input, output, session) {
   })
   
   # Dotplot of Iowa ---------------------------------------------------------
-  
   
   output$mapPlot <- renderPlotly({
     tryCatch(
@@ -953,7 +902,6 @@ server <- function(input, output, session) {
   
   # Levy Plot ---------------------------------------------
   
-  
   output$plotly <- renderPlotly({
     levy_sub() %>%
       ggplot(aes(x = Year, y = y())) +
@@ -964,7 +912,6 @@ server <- function(input, output, session) {
   })
   
   # City Comparison  ---------------------------------------------------------
-  
   
   output$ComparePlot <- renderPlot({
     levy %>%
@@ -983,11 +930,7 @@ server <- function(input, output, session) {
       theme_stata()
   })
   
-  
-  
-  
   # Drive Time Analysis -------------------------------------
-  
   
   output$LevyMapPlotly <- renderPlotly({
     gg1 <- levy %>%
@@ -1001,7 +944,7 @@ server <- function(input, output, session) {
                 colour = "grey70") +
       geom_point(aes(size = Population,
                      colour = MSA),
-                 data = hubs,
+                 data = all_cities %>% filter(Population >= 50000),
                  alpha = 0.4) +
       geom_point(aes(
         label = CITY.NAME,
@@ -1009,7 +952,6 @@ server <- function(input, output, session) {
         shape = `Commute ≥ 50 mins`
       ),
       size = 3) +
-      #  geom_point(aes(colour="small cities")) +
       theme_bw() +
       scale_size(range = c(5, 10), guide = NULL) +
       scale_shape_manual("50 min or more Commute", values = c(19, 1)) +
@@ -1028,7 +970,7 @@ server <- function(input, output, session) {
                 colour = "grey70") +
       geom_point(aes(size = Population,
                      colour = microMSA),
-                 data = hubs10,
+                 data = all_cities %>% filter(Population >= 10000),
                  alpha = 0.4) +
       geom_point(aes(
         label = CITY.NAME,
@@ -1036,11 +978,9 @@ server <- function(input, output, session) {
         shape = `Commute ≥ 50 mins`
       ),
       size = 3) +
-      #  geom_point(aes(colour="small cities")) +
       theme_bw() +
       scale_size(range = c(5, 10), guide = NULL) +
       scale_shape_manual("50 min or more Commute", values = c(19, 1)) +
-      #  scale_colour_brewer("Hub and influence region", palette = "Paired") +
       ggthemes::theme_map() +
       theme(legend.position = "none")
     
@@ -1051,7 +991,6 @@ server <- function(input, output, session) {
   })
   
   # ArcGIS Crop Diversiy Map -----------------------------------------------------
-  
   
   output$arcFrame <- renderUI({
     HTML(
@@ -1080,8 +1019,6 @@ server <- function(input, output, session) {
   })
   
   # Measures of Crop Diversity -------------------------------------------------
-  
-  
   
   #Crop Diversity Lollipop
   crop_sub <- reactive({
@@ -1115,7 +1052,7 @@ server <- function(input, output, session) {
     )
   })
   
-  ###Landscape Diversity Map
+  #Landscape Diversity Map
   observe({
     d <- event_data("plotly_click", source = "plotly_divmet")
     if (!is.null(d)) {
@@ -1127,7 +1064,6 @@ server <- function(input, output, session) {
   
   
   div_sub <- reactive({
-    #    browser()
     div_mets %>%
       filter(div_metric_nice == input$which_divmet)
   })
@@ -1178,44 +1114,6 @@ server <- function(input, output, session) {
       ))
   })
   
-  # Diversity Metric Viz
-  viz_reac <- reactive({
-    bind_rows(viz_base,
-              MakeFakeFun(crop_mets %>%
-                            filter(city_name == input$which_city_viz), 100))
-  })
-  
-  
-  # output$plot_viz <- renderPlot({
-  #   
-  #   #div_mets2 <- div_mets %>% filter(div_metric == "shan_div_h")
-  #   
-  #   viz_reac() %>%
-  #     left_join(div_mets) %>%
-  #     filter(!is.na(city_name)) %>%
-  #     mutate(value = round(value, 2)) %>%
-  #     arrange(value) %>%
-  #     mutate(city_name2 = paste(city_name, ",\n Shannon Div Index =", value),
-  #            city_name2 = fct_inorder(city_name2)) %>%
-  #     mutate(crop = ifelse(crop == "Corn", "Corn/Soybeans",
-  #                          ifelse(
-  #                            crop == "Soybeans", "Corn/Soybeans",
-  #                            "Other"))) %>%
-  #     ggplot(aes(x = x, y = y)) +
-  #     geom_tile(aes(fill = crop)) +
-  #     scale_fill_manual(values = c("Corn/Soybeans" = "gold3",
-  #                                  "Other" = "gray20")) +
-  #     facet_grid(~city_name2) +
-  #     theme_stata()  +
-  #     labs(fill = NULL,
-  #          x = NULL,
-  #          y = NULL) +
-  #     theme(axis.text.x = element_blank(),
-  #           axis.text.y = element_blank(),
-  #           axis.ticks.x = element_blank(),
-  #           axis.ticks.y = element_blank())
-  # })
-  # 
   # Quality of Life by Metrics ----------------------------------------------
   output$qolCorrelation <- renderText({
     subds <- ds %>%

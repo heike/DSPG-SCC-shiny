@@ -36,6 +36,15 @@ all_cities <- read.csv("Total_City_Population_by_Year-with-estimate_new.csv")
 #Base Dataset 2006 - 2020
 levy <- read.csv("levy_all.csv")
 
+levy <- levy %>%
+  rename(`Job Quality` = QOLjobs_i14,
+         `Medical Quality` = QOLmed_i14,
+         `K-12 Quality` = QOLk12_i14,
+         `Housing Quality` = QOLhousing_i14,
+         `Governmental Services Quality` = QOLgovt_i14,
+         `Child Services Quality` = QOLchildsrv_i14,
+         `Senior Services Quality` = QOLseniorsrv_i14)
+
 # Dotplot of Iowa ----------------------------------------------------
 
 ## set the rows to be used as metrics - all continuous numerical values; will end up being the size of dots
@@ -53,13 +62,13 @@ metrics <- c(
   "min10",
   "miles25",
   "min25",
-  "QOLjobs_i14",
-  "QOLmed_i14",
-  "QOLk12_i14",
-  "QOLhousing_i14",
-  "QOLgovt_i14",
-  "QOLchildsrv_i14",
-  "QOLseniorsrv_i14"
+  "Job Quality",
+  "Medical Quality",
+  "K-12 Quality",
+  "Housing Quality",
+  "Governmental Services Quality",
+  "Child Services Quality",
+  "Senior Services Quality"
 )
 
 ## set the rows to be used as colors of dots - if factor use discrete, if continuous use continuous
@@ -80,131 +89,31 @@ fills <- c(
   "min10",
   "miles25",
   "min25",
-  "QOLjobs_i14",
-  "QOLmed_i14",
-  "QOLk12_i14",
-  "QOLhousing_i14",
-  "QOLgovt_i14",
-  "QOLchildsrv_i14",
-  "QOLseniorsrv_i14"
+  "Job Quality",
+  "Medical Quality",
+  "K-12 Quality",
+  "Housing Quality",
+  "Governmental Services Quality",
+  "Child Services Quality",
+  "Senior Services Quality"
 )
 
 levy_qol <- levy %>%
-  select(Year, CITY.NAME, longitude, latitude, fills, metrics) %>%
+  select(Year, CITY.NAME, longitude, latitude, all_of(fills), all_of(metrics)) %>%
   filter(Year >= 2010,
          Year <= 2016)
 
 
 # Measures of Crop Diversity  ---------------------------------------------------------
 
-ag_land <- read_csv("crop-diversity_metrics.csv") %>%
-  filter(div_metric == "ag_prop", year == 2014) %>%
-  rename("ag_prop_all" = value) %>%
-  select(-div_metric, -div_metric_nice)
-
 crop_mets <- read_csv("crop-metrics.csv") %>%
   mutate(crop = str_to_title(crop),
          crop = str_replace_all(crop, "_", " ")) %>%
   filter(year == 2014)
 
-div_mets <- read_csv("crop-diversity_metrics.csv") %>%
+div_mets <- read.csv("crop-diversity_metrics.csv") %>%
   filter(year == 2014) %>%
   mutate(ag_prop_all = value) 
-
-MakeFakeFun <- function(dat = hiD, grid = 100) {
-  f.dat <-
-    dat %>%
-    filter(!is.na(crop_prop),
-           crop_prop > 0)
-  #--repeat each crop by it's proportions to make 100 entries
-  cropType <- c()
-
-  for (i in 1:nrow(f.dat)) {
-    #i <- 1
-    crop.tmp <- f.dat %>% slice(i) %>% pull(crop)
-    prop.tmp <- f.dat %>% slice(i) %>% pull(crop_prop)
-    cropType <- c(cropType,
-                  rep(crop.tmp, round(prop.tmp, 2) * grid))
-  }
-
-  len_cropType <- length(cropType)
-  fake_nums <- tibble(x =  rep(1:sqrt(grid), each = sqrt(grid)),
-                      y =  rep(1:sqrt(grid), times = sqrt(grid))) %>%
-    mutate(n = 1:n())
-
-  if (len_cropType == grid) {
-    dat_fake <-
-      tibble(crop = cropType) %>%
-      #--randomly assign it an x value between 1 and 100
-      mutate(n = sample(
-        seq(from = 1, to = grid, by = 1),
-        replace = F,
-        size =  grid
-      )) %>%
-      left_join(fake_nums) %>%
-      left_join(f.dat) %>%
-      select(-crop_prop)
-  } else {
-    if (len_cropType < grid) {
-      add_corn <- rep("corn", grid - len_cropType)
-      dat_fake <-
-        tibble(crop = c(cropType, add_corn)) %>%
-        #--randomly assign it an x value between 1 and 100
-        mutate(n = sample(
-          seq(
-            from = 1,
-            to = grid,
-            by = 1
-          ),
-          replace = F,
-          size =  grid
-        )) %>%
-        left_join(fake_nums) %>%
-        left_join(f.dat) %>%
-        select(-crop_prop)
-    } else {
-      #--if len_cropType > grid
-      dat_fake <-
-        tibble(crop = cropType[1:100]) %>%
-        #--randomly assign it an x value between 1 and 100
-        mutate(n = sample(
-          seq(
-            from = 1,
-            to = grid,
-            by = 1
-          ),
-          replace = F,
-          size =  grid
-        )) %>%
-        left_join(fake_nums) %>%
-        left_join(f.dat) %>%
-        select(-crop_prop)
-    }
-  }
-  return(dat_fake)
-}
-
-mx_shan_town <-
-  div_mets %>%
-  filter(div_metric == "shan_div_h") %>%
-  filter(value == max(value)) %>%
-  pull(city_name) %>%
-  unique()
-mx_shan_dat <-
-  MakeFakeFun(crop_mets %>%
-                filter(city_name == mx_shan_town), 100)
-min_shan_town <-
-  div_mets %>%
-  filter(div_metric == "shan_div_h") %>%
-  filter(value == min(value)) %>%
-  pull(city_name) %>%
-  unique()
-min_shan_dat <-
-  MakeFakeFun(crop_mets %>%
-                filter(city_name == min_shan_town), 100)
-viz_base <-
-  bind_rows(mx_shan_dat, min_shan_dat)
-
 
 
 # Quality of Life by Metrics ------------------------------------------------
@@ -267,14 +176,10 @@ qol_metrics <- c(
 
 # Shiny Header --------------------------------------------------------------
 
-#header <- dashboardHeader()
-#  dashboardHeader(title = "Shrink Smarter Iowa", titleWidth = 600)
 header <- dashboardHeader(title = tags$a(href='http://ruralshrinksmart.org',
                                tags$img(src='http://ruralshrinksmart.org/wp-content/uploads/2020/12/bckss-29.png')))
 
-
 # Sidebar -----------------------------------------------------------------
-
 
 sidebar <- dashboardSidebar(
   sidebarMenu(
@@ -327,14 +232,11 @@ sidebar <- dashboardSidebar(
   )
 )
 
-
 # Body --------------------------------------------------------------------
-
 
 body <- dashboardBody(
   useShinyjs(),
   use_theme(mytheme),
-  
   
   # Overview Tab ------------------------------------------------------------
   
@@ -428,7 +330,6 @@ body <- dashboardBody(
         ),
         box(
           plotlyOutput("mapPlot", width = 0.75 * 1100, height = 0.75 * 700),
-          #width = 5,
           status = "primary"
         )
       )
@@ -1068,7 +969,6 @@ server <- function(input, output, session) {
       filter(div_metric_nice == input$which_divmet)
   })
   
-  
   output$plotly_divmet <- renderPlotly({
     ggplotly(
       source = "plotly_divmet",
@@ -1078,12 +978,9 @@ server <- function(input, output, session) {
         geom_point(
           data = div_sub(),
           size = 10,
-          #color = "black",
-          #pch = 21,
           aes(
             x = longitude,
             y = latitude,
-            #size = value,
             color = value,
             text = paste(
               "City name:",
@@ -1161,7 +1058,6 @@ server <- function(input, output, session) {
         face = "bold"
       ))
   })
-  
 }
 
 shinyApp(ui = ui, server = server)

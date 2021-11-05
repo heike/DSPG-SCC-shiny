@@ -324,15 +324,19 @@ body <- dashboardBody(
                 ),
                 div(
                   align = "right",
+                  HTML(
+                    "<p>
+                      <em>
+                        <strong>Fig.1 </strong>
+                          Change in population in Iowa's communities between 2010 and 2019. Red indicates a population loss of 2.5% or more, blue indicates a gain of 2.5% or more. The size of dots is indicative of population size.
+                      </em>
+                    </p>"
+                  ),
                   img(
                     src = 'Iowa-population-change-2010-19.png',
                     width = "45%",
-                    #  height = "430px",
                     align = "right"
-                  ),
-                  HTML(
-                    "<p><em><strong>Fig.1 </strong>Change in population in Iowa's communities between 2010 and 2019. Red indicates a population loss of 2.5% or more, blue indicates a gain of 2.5% or more. The size of dots is indicative of population size.</em></p>"
-                  )
+                    )
                 ),
                 div(
                   plotlyOutput("plotly_loss", width = "45%", height = "300px"),
@@ -350,8 +354,17 @@ body <- dashboardBody(
                 ),
                 h2("Ethical Considerations"),
                 p(
-                  "The data used to create our ecosystem has been through the use of publicly available data. XXX list actual sources with as much detail as possible - include names and links"
-                )
+                  "The data used to create our ecosystem has been through the use of publicly available data. Sources include:"
+                ),
+                HTML("<ul>
+                        <li><a href='https://console.developers.google.com/apis'>Google Developer API</a></li>
+                        <li><a href='https://dom.iowa.gov/'>Iowa Department of Management</a></li>
+                        <li><a href='https://smalltowns.soc.iastate.edu/iowa-small-town-poll/'>Iowa Small Town Poll</a></li>
+                        <li><a href='https://www.tandfonline.com/doi/abs/10.1080/10106049.2011.562309'>Monitoring US agriculture: the US Department of Agriculture, National Agricultural Statistics Service, Cropland Data Layer Program - <i>C. Boryan, Z.Yang, R. Mueller, M. Craig</i></a></li>
+                        <li><a href='https://data.census.gov/cedsci/'>United States 2010 Decennial Census</a></li>
+                        <li><a href='https://nassgeodata.gmu.edu/CropScape/'>United States Department of Agriculture</a></li>
+                      </ul>
+                     ")
               )
             )),
     
@@ -800,7 +813,7 @@ server <- function(input, output, session) {
         y = rate / population * 100,
         label = CITY.NAME
       )) + geom_boxplot() + coord_flip() +
-      ylab("Percent Population Change") + xlab("")
+      ylab("Percent Population Change") + xlab("") + theme_stata()
     
     ggplotly(gg)
   })
@@ -826,7 +839,8 @@ server <- function(input, output, session) {
             ) +
             theme_map() +
             scale_color_viridis_d(begin = 0, end = 0.8) +
-            theme(legend.text = element_text(size = 12)),
+            theme(legend.text = element_text(size = 12),
+                  legend.position = "top"),
           tooltip = c("text", "size")
         ) %>%
           layout(legend = list(
@@ -869,7 +883,8 @@ server <- function(input, output, session) {
       ggplot(aes(x = Year, y = y())) +
       geom_line(aes(group = CITY.NAME)) +
       facet_grid(CITY.SIZE ~ ., scales = "free_y") +
-      ylab(input$which_variable)
+      ylab(input$which_variable) +
+      theme_stata()
     print(plotly::ggplotly())
   })
   
@@ -1105,6 +1120,7 @@ server <- function(input, output, session) {
         geom_point() +
         scale_color_viridis_d(begin = 0, end = 0.8) +
         theme(legend.text = element_text(size = 12)) +
+        theme_stata() +
         geom_smooth(
           aes(group = 1),
           colour = "grey70",

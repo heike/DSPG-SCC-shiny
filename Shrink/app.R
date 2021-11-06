@@ -363,8 +363,12 @@ body <- dashboardBody(
                         <li><a href='https://www.tandfonline.com/doi/abs/10.1080/10106049.2011.562309'>Monitoring US agriculture: the US Department of Agriculture, National Agricultural Statistics Service, Cropland Data Layer Program - <i>C. Boryan, Z.Yang, R. Mueller, M. Craig</i></a></li>
                         <li><a href='https://data.census.gov/cedsci/'>United States 2010 Decennial Census</a></li>
                         <li><a href='https://nassgeodata.gmu.edu/CropScape/'>United States Department of Agriculture</a></li>
-                      </ul>
-                     ")
+                      </ul>"
+                ),
+                h2("Sponsor"),
+                p(
+                  "This project is sponsored by Kimberly Zarecor with ISU Smart & Connected Communities."
+                )
               )
             )),
     
@@ -541,10 +545,10 @@ body <- dashboardBody(
       fluidRow(box(
         width = 12,
         p(
-          "The ArcGIS map below shows the type of crops grown across Iowa. Agriculture is an important sector in Iowa and the types of crops shows [XXX] "
+          "The ArcGIS map below shows the type of crops grown across Iowa."
         ),
         p(
-          "On the left is a legend of all the crops shown on the graph. Each blue circle represent a radius of XXX around one of the 99 communities.
+          "On the left is a legend of all the crops shown on the graph. Each blue circle represent a radius of five miles around one of the 99 communities.
           The most popular crops grown are corn and soybeans in yellow and dark green respectively. "
         ),
         p("Zoom in and out to gain a more descriptive picture.")
@@ -713,7 +717,7 @@ body <- dashboardBody(
                       width = "150px",
                       height = "150px"
                     ),
-                    p("Dr. Gina Nichols, DSPG Advisor, Agronomy")
+                    HTML("<p><a href='https://www.agron.iastate.edu/people/virginia-gina-nichols'>Dr. Gina Nichols</a>, DSPG Advisor, Agronomy")
                   ),
                   box(
                     width = 2,
@@ -722,13 +726,14 @@ body <- dashboardBody(
                       width = "150px",
                       height = "150px"
                     ),
-                    p(
-                      "Dr. Heike Hofmann, Professor of Statistics and Professor in Charge of the Data Science Program"
+                    HTML(
+                      "<p><a href='https://www.stat.iastate.edu/people/heike-hofmann'>Dr. Heike Hofmann</a>, Professor of Statistics and Professor in Charge of the Data Science Program</p>"
                     )
                   )
                 ),
                 h2("Project Sponsors and Advisors"),
-                fluidRow(box(
+                fluidRow(
+                  box(
                   width = 2,
                   img(
                     src = 'kimberly.png',
@@ -736,20 +741,18 @@ body <- dashboardBody(
                     height = "150px"
                   ),
                   HTML(
-                    "<p>Dr. Kimberly Zarecor, Professor of Architecture, PI of <a href='https://scc.design.iastate.edu/2020/07/01/nsf-funds-new-research-phase-with-a-1-5-million-grant/'>NSF award 1952007
-SCC-IRG Track 2: Overcoming the Rural Data Deficit to Improve Quality of Life and Community Services in Smart & Connected Small Communities</a></p>"
+                    "<p><a href='https://www.design.iastate.edu/faculty/zarecor/'>Dr. Kimberly Zarecor</a>, Professor of Architecture, Principal Investiagator</p>"
                   )
                 ),
-                box(
-                  width = 2,
-                  img(
-                    src = 'biswa.png',
-                    width = "150px",
-                    height = "150px"
-                  ),
-                  p(
-                    "Dr. Biswa Das, Associate Professor, Community and Regional Planning
-Director of Graduate Education, Community and Regional Planning"
+                  box(
+                    width = 2,
+                    img(
+                      src = 'biswa.png',
+                      width = "150px",
+                      height = "150px"
+                    ),
+                  HTML(
+                    "<p><a href='https://www.design.iastate.edu/faculty/bdas/'>Dr. Biswa Das</a>, Associate Professor, Community and Regional Planning Director of Graduate Education, Community and Regional Planning, Co-Principal Investigator</p>"
                   )
                 )),
                 h2("Acknowledgements"),
@@ -844,9 +847,11 @@ server <- function(input, output, session) {
           tooltip = c("text", "size")
         ) %>%
           layout(legend = list(
-            x = -0.25 ,
-            y = 1,
-            face = "bold"
+            x = 0.95 ,
+            y = 0.1,
+            face = "bold",
+            size = 15,
+            itemsizing = "constant"
           ))
       },
       error = function(e) {
@@ -1053,7 +1058,7 @@ server <- function(input, output, session) {
         geom_path(aes(group = group), colour = "grey30") +
         geom_point(
           data = div_sub(),
-          size = 10,
+          size = 6,
           aes(
             x = longitude,
             y = latitude,

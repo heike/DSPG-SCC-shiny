@@ -45,6 +45,12 @@ levy <- levy %>%
          `Child Services Quality` = QOLchildsrv_i14,
          `Senior Services Quality` = QOLseniorsrv_i14)
 
+#levels(levy$CITY.SIZE)
+levy <- levy %>% mutate(
+  CITY.SIZE = factor(CITY.SIZE),
+  CITY.SIZE = reorder(CITY.SIZE, Population, median, na.rm=TRUE)
+)
+
 ## ---------------- When new dataset comes in, remove the ## ------------------------------ ##
 
 

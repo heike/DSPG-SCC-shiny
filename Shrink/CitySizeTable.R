@@ -8,13 +8,6 @@ library(rlang)
 
 levy <- read.csv("levy_all.csv")
 
-citypop <- levy %>%
-  filter(Year == 2019) %>%
-  select(CITY.NAME, Population, CITY.SIZE) %>%
-  arrange(Population)
-
-totalPop <- sum(citypop$Population)
-
 
 ui <- fluidPage(
   fluidRow(
@@ -23,44 +16,59 @@ ui <- fluidPage(
       label = "Number of Groups",
       value = 4
     ),
-    submitButton("Get Table"),
+    actionButton("action", "Get Table"),
     
-    tableOutput(outputId = "table1")
+    tableOutput("table1")
   )
 )
 
 
 server <- function(input, output) {
+  ##values <- reactiveValues(groupTable = NULL)
   
-  values <- reactiveValues()
-  values$groupTable <- data.frame(Group = integer(), NumberofCities = integer(), GroupPopulation = integer())
-  
-  newEntry <- observe({
-    threshold <- totalPop / input$numGroups
+  data_output <- eventReactive(input$action, {
+    groupTable <- data.frame(Group = 1:input$numGroups, NumberofCities = 1:input$numGroups, GroupPopulation = 1:input$numGroups)
     
+    citypop <- levy %>%
+        filter(Year == 2019) %>%
+        select(Population) %>%
+        arrange(Population)
+    
+    totalPop <- sum(citypop$Population)
+    
+    threshold <- totalPop / input$numGroups
+      
     cityTracker <- 1
     
-    ## add first n - 1 rows
-    for (i in 1:input$numGroups - 1) {
+    for (i in 2:input$numGroups - 1) {
       currentPop <- 0
       currNumCities <- 0
       
-      while (currentPop < threshold) {
-        currentPop =+ citypop[cityTracker,2]
-        currNumCities =+ 1
-        cityTracker =+ 1
+      while (currentPop < threshold & cityTracker <= 100) {
+        currentPop <- currentPop + citypop[cityTracker,1]
+        currNumCities <- currNumCities + 1
+        cityTracker <- cityTracker + 1
       }
       
-      newRow <- isolate(c(i, currNumCities, currentPop))
-      isolate(values$groupTable <- rbind(values$groupTable, newRow))
+      groupTable[i,2] <- currNumCities
+      groupTable[i,3] <- currentPop
+      
     }
     
-    ## add last row using deduction
-    lastRow <- isolate(c(input$numGroups, 100 - sum(groupTable$NumberofCities), totalPop - sum(groupTable$GroupPopulation)))
-    isolate(values$groupTable <- rbind(values$groupTable, lastRowRow))
-  })
+    groupTable[input$numGroups, 2] <- 100 - cityTracker
+    
+    if (groupTable[input$numGroups, 2] == 0) {
+      groupTable[input$numGroups, 3] = 0
+      print("1 or more cities excluded")
+    }
+    else {
+      groupTable[input$numGroups, 3] <- totalPop - sum(groupTable$GroupPopulation)
+    }
+    
+    groupTable
+    })
   
-  output$table1 < renderTable({values$groupTable})
+  output$table1 <- renderTable(data_output())
   
 }
 

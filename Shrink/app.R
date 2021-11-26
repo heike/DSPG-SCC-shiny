@@ -1,5 +1,6 @@
 library(shiny)
 library(shinydashboard)
+library(shinyWidgets)
 library(plotly)
 library(tidyr)
 library(dplyr)
@@ -295,9 +296,39 @@ sidebar <- dashboardSidebar(
       tabName = "team",
       text = "The Shrink Smart Team",
       icon = icon("user-friends")
+    ),
+    
+    
+    ### sidebar dropdown
+    
+    dropdown(div(id = 'my_numinput', 
+                            htmlOutput("g1label"),
+                            htmlOutput("g1bot"),
+                            numericInput("g1upper", "Enter Group 1 Upper Bound", 799),
+                            
+                            htmlOutput("g2label"),
+                            htmlOutput("g2bot"),
+                            numericInput("g2upper", "Enter Group 2 Upper Bound", 2499),
+                            
+                            htmlOutput("g3label"),
+                            htmlOutput("g3bot"),
+                            numericInput("g3upper", "Enter Group 3 Upper Bound", 4999),
+                            
+                            htmlOutput("g4label"),
+                            htmlOutput("g4bot"),
+                            htmlOutput("g4upper")),
+                        
+                        actionButton("action1", "Change Limits"),
+                        
+                        tags$style(type = "text/css", "#my_numinput {color: black}"),
+                        
+                        width = 1000,
+                        animate = TRUE,
+                        label = "Change City Pop Limits")
+        
     )
   )
-)
+
 
 # Body --------------------------------------------------------------------
 
@@ -826,6 +857,39 @@ server <- function(input, output, session) {
     
     ggplotly(gg)
   })
+  
+  # Sidebar City Limit Change -----------------------------------------------
+  
+  output$g1label <- renderText({paste("<b>Group 1 Lower Bound:</b>")})
+  output$g1bot <- renderText({paste("<b><p style=font-size:20px>0</p></b>")})
+  
+  output$g2label <- renderText({paste("<b>Group 2 Lower Bound:</b>")})
+  output$g2bot <- renderText({paste("<b><p style=font-size:20px>", input$g1upper[1] + 1, "</p></b>")})
+  
+  output$g3label <- renderText({paste("<b>Group 3 Lower Bound:</b>")})
+  output$g3bot <- renderText({paste("<b><p style=font-size:20px>", input$g2upper[1] + 1, "</p></b>")})
+  
+  output$g4label <- renderText({paste("<b>Group 4 Lower Bound:</b>")})
+  output$g4bot <- renderText({paste("<b><p style=font-size:20px>", input$g3upper[1] + 1, "</p></b> <br>")})
+  output$g4upper <- renderText({paste("Group 4 Upper Bound <b><p style=font-size:20px>25000</p></b>")})
+  
+  
+  
+  eventReactive(input$action1, {
+    levy_qol <- levy_qol %>%
+      mutate(CITY.SIZE = ifelse(Population <= input$g1upper, 
+                              "Group 1",
+                              ifelse(Population <= input$g2upper,
+                                     "Group 2",
+                                     ifelse(Population <= input$g3upper,
+                                            "Group 3",
+                                            "Group 4"))))
+  })
+  
+  
+  
+  
+  
   
   # Dotplot of Iowa ---------------------------------------------------------
   

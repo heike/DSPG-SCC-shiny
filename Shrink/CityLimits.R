@@ -13,19 +13,19 @@ ui <- wellPanel(
     flowLayout(
       htmlOutput("g1label"),
       htmlOutput("g1bot"),
-      numericInput("g1upper", "Enter Group 1 Upper Bound", 0)
+      numericInput("g1upper", "Enter Group 1 Upper Bound", 799)
     ),
     
     flowLayout(
       htmlOutput("g2label"),
       htmlOutput("g2bot"),
-      numericInput("g2upper", "Enter Group 2 Upper Bound", 1)
+      numericInput("g2upper", "Enter Group 2 Upper Bound", 2499)
     ),
     
     flowLayout(
       htmlOutput("g3label"),
       htmlOutput("g3bot"),
-      numericInput("g3upper", "Enter Group 3 Upper Bound", 2)
+      numericInput("g3upper", "Enter Group 3 Upper Bound", 4999)
     ),
     
     flowLayout(
@@ -57,7 +57,7 @@ server <- function(input, output) {
   
   output$g4label <- renderText({paste("<b>Group 4 Lower Bound:</b>")})
   output$g4bot <- renderText({paste("<b><p style=font-size:20px>", input$g3upper[1] + 1, "</p></b>")})
-  output$g4upper <- renderText({paste("<b><p style=font-size:20px>25000</p></b>")})
+  output$g4upper <- renderText({paste("Group 4 Upper Bound <b><p style=font-size:20px>25000</p></b>")})
   
   
   data_output <- eventReactive(input$action, {

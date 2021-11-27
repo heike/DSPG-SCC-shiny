@@ -874,16 +874,21 @@ server <- function(input, output, session) {
   output$g4upper <- renderText({paste("Group 4 Upper Bound <b><p style=font-size:20px>25000</p></b>")})
   
   
-  
-  eventReactive(input$action1, {
-    levy_qol <- levy_qol %>%
-      mutate(CITY.SIZE = ifelse(Population <= input$g1upper, 
-                              "Group 1",
-                              ifelse(Population <= input$g2upper,
-                                     "Group 2",
-                                     ifelse(Population <= input$g3upper,
-                                            "Group 3",
-                                            "Group 4"))))
+  levy_reactive <- eventReactive(input$action1, {
+    if (input$g1upper < input$g2upper & input$g2upper < input$g3upper & input$g3upper < 25000) {
+      levy_qol %>% mutate(CITY.SIZE = ifelse(Population <= input$g1upper, 
+                                             "Group 1", 
+                                             ifelse(Population <= input$g2upper,
+                                                    "Group 2", 
+                                                    ifelse(Population <= input$g3upper, 
+                                                           "Group 3",
+                                                           "Group 4"))))
+    }
+    
+    else {
+      stop("Invalid city size limits")
+    }
+    
   })
   
   
@@ -901,7 +906,7 @@ server <- function(input, output, session) {
             ggplot(aes(x = long, y = lat)) +
             geom_path(aes(group = group), colour = "grey30") +
             geom_point(
-              data = (levy_qol %>% filter(Year == input$Year2) %>% distinct()),
+              data = (levy_reactive() %>% filter(Year == input$Year2) %>% distinct()),
               aes(
                 x = longitude,
                 y = latitude,
@@ -930,7 +935,7 @@ server <- function(input, output, session) {
             ggplot(aes(x = long, y = lat)) +
             geom_path(aes(group = group), colour = "black") +
             geom_point(
-              data = (levy_qol %>% filter(Year == input$Year2) %>% distinct()),
+              data = (levy_reactive() %>% filter(Year == input$Year2) %>% distinct()),
               aes(
                 x = longitude,
                 y = latitude,

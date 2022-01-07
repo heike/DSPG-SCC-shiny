@@ -195,22 +195,22 @@ sidebar <- dashboardSidebar(
     menuItem(
       tabName = "overview",
       text = "Project Overview",
-      icon = icon("info circle")
+      icon = icon("info-circle")
     ),
     menuItem(
       text = "Dotplot of Iowa",
       tabName = "Dotplot",
-      icon = icon("map-o")
+      icon = icon("far fa-map")
     ),
     menuItem(
       text = "Levy Rates of Cities",
       tabName = "LevyCity",
-      icon = icon("line-chart")
+      icon = icon("fas fa-chart-line")
     ),
     menuItem(
       text = "City Comparison",
       tabName = "Compare",
-      icon = icon("bar-chart-o")
+      icon = icon("chart-bar")
     ),
     menuItem(
       text = "Drive Time Analysis",
@@ -279,6 +279,8 @@ body <- dashboardBody(
   # Overview Tab ------------------------------------------------------------
   
   tabItems(
+    
+    
     tabItem(tabName = "overview",
             fluidRow(
               box(
@@ -313,7 +315,7 @@ body <- dashboardBody(
                     src = 'Iowa-population-change-2010-19.png',
                     width = "45%",
                     align = "right"
-                    )
+                  )
                 ),
                 div(
                   plotlyOutput("plotly_loss", width = "45%", height = "300px"),
@@ -503,17 +505,16 @@ body <- dashboardBody(
           selectInput("msa", "Select Hub Size:",
                       choices = c("Metropolitan Statistical Area (MSA)", "Micropolitan Statistical Area (µMSA)"))
         ),
-        tabBox(
-          title = "",
+        box(
+          title = (""),
           width = 9,
           side = "right",
-          tabPanel("Economic Hubs"),
-          
+     #     tabPanel("Economic Hubs"),
+
           plotlyOutput("LevyMapPlotly", height = 700)
         )
-      )
+       )
     ),
-    
     # ArcGis Crop Diversity Map ---------------------------------------------------------------
     
     tabItem(
@@ -538,6 +539,7 @@ body <- dashboardBody(
       )))
     ),
     
+        
     # Measures of Crop Diversity ----------------------------------------------
     
     tabItem(
@@ -599,6 +601,7 @@ body <- dashboardBody(
       ))
     ),
     
+    
     # Quality of Life by Metrics ----------------------------------------------
     
     tabItem(
@@ -637,6 +640,7 @@ body <- dashboardBody(
         ))
       )
     ),
+    
     
     # Team Tab ----------------------------------------------------------------
     
@@ -711,16 +715,16 @@ body <- dashboardBody(
                 h2("Project Sponsors and Advisors"),
                 fluidRow(
                   box(
-                  width = 2,
-                  img(
-                    src = 'kimberly.png',
-                    width = "150px",
-                    height = "150px"
+                    width = 2,
+                    img(
+                      src = 'kimberly.png',
+                      width = "150px",
+                      height = "150px"
+                    ),
+                    HTML(
+                      "<p><a href='https://www.design.iastate.edu/faculty/zarecor/'>Dr. Kimberly Zarecor</a>, Professor of Architecture, Principal Investiagator</p>"
+                    )
                   ),
-                  HTML(
-                    "<p><a href='https://www.design.iastate.edu/faculty/zarecor/'>Dr. Kimberly Zarecor</a>, Professor of Architecture, Principal Investiagator</p>"
-                  )
-                ),
                   box(
                     width = 2,
                     img(
@@ -728,10 +732,10 @@ body <- dashboardBody(
                       width = "150px",
                       height = "150px"
                     ),
-                  HTML(
-                    "<p><a href='https://www.design.iastate.edu/faculty/bdas/'>Dr. Biswa Das</a>, Associate Professor, Community and Regional Planning Director of Graduate Education, Community and Regional Planning, Co-Principal Investigator</p>"
-                  )
-                )),
+                    HTML(
+                      "<p><a href='https://www.design.iastate.edu/faculty/bdas/'>Dr. Biswa Das</a>, Associate Professor, Community and Regional Planning Director of Graduate Education, Community and Regional Planning, Co-Principal Investigator</p>"
+                    )
+                  )),
                 h2("Acknowledgements"),
                 p(
                   ""

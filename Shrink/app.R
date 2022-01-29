@@ -242,29 +242,18 @@ sidebar <- dashboardSidebar(
     ### sidebar dropdown
     
     dropdown(div(id = 'my_numinput', 
-                            htmlOutput("g1label"),
-                            htmlOutput("g1bot"),
-                            numericInput("g1upper", "Enter Group 1 Upper Bound", 799),
-                            
-                            htmlOutput("g2label"),
-                            htmlOutput("g2bot"),
-                            numericInput("g2upper", "Enter Group 2 Upper Bound", 2499),
-                            
-                            htmlOutput("g3label"),
-                            htmlOutput("g3bot"),
-                            numericInput("g3upper", "Enter Group 3 Upper Bound", 4999),
-                            
-                            htmlOutput("g4label"),
-                            htmlOutput("g4bot"),
-                            htmlOutput("g4upper")),
+                 p("Set the slider range to your desired population values, starting with the first range"),
+                 sliderInput("range1", "Rural:", min=0, max=25000, value=c(0,800), step = 100),
+                 sliderInput("range2", "Rural Plus:", min=0, max=25000, value=c(800, 2500), step = 100),
+                 sliderInput("range3", "Urban Cluster:", min=0, max=25000, value=c(2500, 5000), step = 100),
+                 sliderInput("range4", "Nano- and Micropolitan:", min=0, max=25000, value=c(5000, 25000), step = 100)),
                         
-                        actionButton("action1", "Change Limits"),
-                        
-                        tags$style(type = "text/css", "#my_numinput {color: black}"),
-                        
-                        width = 1000,
-                        animate = TRUE,
-                        label = "Change City Pop Limits")
+             actionButton("action1", "Change Limits"),
+             
+             tags$style(type = "text/css", "#my_numinput {color: black}"),
+             width = 1000,
+             animate = TRUE,
+             label = "Change City Pop Limits")
         
     )
   )
@@ -804,27 +793,25 @@ server <- function(input, output, session) {
   
   # Sidebar City Limit Change -----------------------------------------------
   
-  output$g1label <- renderText({paste("<b>Group 1 Lower Bound:</b>")})
-  output$g1bot <- renderText({paste("<b><p style=font-size:20px>0</p></b>")})
+  observe({
+    # Control the value, min, max, and step.
+    updateSliderInput(session, "range2", value = c(input$range1[2], 2500),
+                      min = input$range1[2], max = 25000, step = 100)})
   
-  output$g2label <- renderText({paste("<b>Group 2 Lower Bound:</b>")})
-  output$g2bot <- renderText({paste("<b><p style=font-size:20px>", input$g1upper[1] + 1, "</p></b>")})
+  observe({
+    updateSliderInput(session, "range3", value = c(input$range2[2], 5000),
+                      min = input$range2[2], max = 25000, step = 100)})
   
-  output$g3label <- renderText({paste("<b>Group 3 Lower Bound:</b>")})
-  output$g3bot <- renderText({paste("<b><p style=font-size:20px>", input$g2upper[1] + 1, "</p></b>")})
-  
-  output$g4label <- renderText({paste("<b>Group 4 Lower Bound:</b>")})
-  output$g4bot <- renderText({paste("<b><p style=font-size:20px>", input$g3upper[1] + 1, "</p></b> <br>")})
-  output$g4upper <- renderText({paste("Group 4 Upper Bound <b><p style=font-size:20px>25000</p></b>")})
-  
+  observe({
+    updateSliderInput(session, "range4", value = c(input$range3[2], 25000),
+                      min = input$range3[2], max = 25000, step = 100)})  
   
   levy_reactive <- eventReactive(input$action1, {
-    if (input$g1upper < input$g2upper & input$g2upper < input$g3upper & input$g3upper < 25000) {
-      levy_qol %>% mutate(CITY.SIZE = ifelse(Population <= input$g1upper, 
+      levy_qol %>% mutate(CITY.SIZE = ifelse(Population < input$range1[2], 
                                              "RURAL", 
-                                             ifelse(Population <= input$g2upper,
+                                             ifelse(Population < input$range2[2] && Population >= input$range2[1],
                                                     "RURAL PLUS", 
-                                                    ifelse(Population <= input$g3upper, 
+                                                    ifelse(Population < input$range3[2] && Population >= input$range3[1], 
                                                            "URBAN CLUSTER",
                                                            "NANO- and MICROPOLITAN"))))
       
@@ -866,11 +853,6 @@ server <- function(input, output, session) {
           mutate(Fiscal.Effort = (Per.Capita.Revenue / (Per.Capita.Valuation * Group.Levy.Rate)) * 100000)
       
       levy_qol
-    }
-    
-    else {
-      stop("Invalid city size limits")
-    }
     
   })
   

@@ -111,6 +111,8 @@ levy_qol <- levy %>%
   filter(Year >= 2010,
          Year <= 2016)
 
+RV <- reactiveValues()
+
 
 # Measures of Crop Diversity  ---------------------------------------------------------
 
@@ -794,7 +796,6 @@ server <- function(input, output, session) {
   # Sidebar City Limit Change -----------------------------------------------
   
   observe({
-    # Control the value, min, max, and step.
     updateSliderInput(session, "range2", value = c(input$range1[2], 2500),
                       min = input$range1[2], max = 25000, step = 100)})
   
@@ -806,55 +807,61 @@ server <- function(input, output, session) {
     updateSliderInput(session, "range4", value = c(input$range3[2], 25000),
                       min = input$range3[2], max = 25000, step = 100)})  
   
-  levy_reactive <- eventReactive(input$action1, {
-      levy_qol %>% mutate(CITY.SIZE = ifelse(Population < input$range1[2], 
-                                             "RURAL", 
-                                             ifelse(Population < input$range2[2] && Population >= input$range2[1],
-                                                    "RURAL PLUS", 
-                                                    ifelse(Population < input$range3[2] && Population >= input$range3[1], 
-                                                           "URBAN CLUSTER",
-                                                           "NANO- and MICROPOLITAN"))))
-      
-      
-      levy_qol <- levy_qol %>%
-        mutate(Prop.Tax.Revenue = (Adjusted.Amount / 1000) * Levy.Rate)
-      
-      ## Per Capita Revenue already in set
-      
-      levy_groups_PCRev <- levy_qol %>%
-          filter(!is.na(Levy.Rate)) %>%
-          group_by(CITY.SIZE, Year) %>%
-          summarise(Group.Population = sum(Population),
-                    Group.Per.Capita.Revenue = sum(Per.Capita.Revenue) / Group.Population) %>%
-          select(CITY.SIZE, Year, Group.Per.Capita.Revenue)
-      
-      levy_qol <- left_join(levy_qol, levy_groups_PCRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
-      
-      levy_groups_TRRev <- levy_qol %>%
-          group_by(CITY.SIZE, Year) %>%
-          summarise(Group.Population = sum(Population),
-                    Group.Tax.Valuation = sum(Adjusted.Amount),
-                    Group.Per.Capita.Valuation = Group.Tax.Valuation / Group.Population) %>%
-          select(-3) 
-      
-      levy_qol <- left_join(levy_qol, levy_groups_TRRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
-      
-      levy_groups_PGLR <- levy_qol %>%
-          filter(!is.na(Levy.Rate)) %>%
-          group_by(CITY.SIZE, Year) %>%
-          summarise(Group.Levy.Rate = 1000 * sum(Prop.Tax.Revenue) / sum(Adjusted.Amount))
-      
-      levy_qol <- left_join(levy_qol, levy_groups_PGLR, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
-      
-      levy_qol <- levy_qol %>%
-          mutate(Fiscal.Capacity = (Per.Capita.Valuation / Group.Per.Capita.Valuation) * 100)
-      
-      levy_qol <- levy_qol %>%
-          mutate(Fiscal.Effort = (Per.Capita.Revenue / (Per.Capita.Valuation * Group.Levy.Rate)) * 100000)
-      
-      levy_qol
-    
+  levy_react <- reactive({
+    levy_qol
   })
+  
+  observe({
+    RV$levy_qol <- levy_react()
+  })
+  
+  observeEvent(input$action1, {
+    RV$levy_qol <- levy_qol %>% mutate(CITY.SIZE = ifelse(Population < input$range1[2], 
+                                     "RURAL", 
+                                     ifelse((Population < input$range2[2] & Population >= input$range2[1]),
+                                            "RURAL PLUS", 
+                                            ifelse((Population < input$range3[2] & Population >= input$range3[1]), 
+                                                   "URBAN CLUSTER",
+                                                   "NANO- and MICROPOLITAN"))))
+    
+    
+    RV$levy_qol <- RV$levy_qol %>%
+      mutate(Prop.Tax.Revenue = (Adjusted.Amount / 1000) * Levy.Rate)
+    
+    ## Per Capita Revenue already in set
+    
+    levy_groups_PCRev <- RV$levy_qol %>%
+      filter(!is.na(Levy.Rate)) %>%
+      group_by(CITY.SIZE, Year) %>%
+      summarise(Group.Population = sum(Population),
+                Group.Per.Capita.Revenue = sum(Per.Capita.Revenue) / Group.Population) %>%
+      select(CITY.SIZE, Year, Group.Per.Capita.Revenue)
+    
+    RV$levy_qol <- left_join(RV$levy_qol, levy_groups_PCRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+    
+    levy_groups_TRRev <- RV$levy_qol %>%
+      group_by(CITY.SIZE, Year) %>%
+      summarise(Group.Population = sum(Population),
+                Group.Tax.Valuation = sum(Adjusted.Amount),
+                Group.Per.Capita.Valuation = Group.Tax.Valuation / Group.Population) %>%
+      select(-3) 
+    
+    RV$levy_qol <- left_join(RV$levy_qol, levy_groups_TRRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+    
+    levy_groups_PGLR <- RV$levy_qol %>%
+      filter(!is.na(Levy.Rate)) %>%
+      group_by(CITY.SIZE, Year) %>%
+      summarise(Group.Levy.Rate = 1000 * sum(Prop.Tax.Revenue) / sum(Adjusted.Amount))
+    
+    RV$levy_qol <- left_join(RV$levy_qol, levy_groups_PGLR, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+    
+    RV$levy_qol <- RV$levy_qol %>%
+      mutate(Fiscal.Capacity = (Per.Capita.Valuation / Group.Per.Capita.Valuation) * 100)
+    
+    RV$levy_qol %>%
+      mutate(Fiscal.Effort = (Per.Capita.Revenue / (Per.Capita.Valuation * Group.Levy.Rate)) * 100000)
+    
+  }, ignoreNULL = TRUE)
   
   
   
@@ -871,7 +878,7 @@ server <- function(input, output, session) {
             ggplot(aes(x = long, y = lat)) +
             geom_path(aes(group = group), colour = "grey30") +
             geom_point(
-              data = (levy_reactive() %>% filter(Year == input$Year2) %>% distinct()),
+              data = (RV$levy_qol %>% filter(Year == input$Year2) %>% distinct()),
               aes(
                 x = longitude,
                 y = latitude,
@@ -892,7 +899,8 @@ server <- function(input, output, session) {
             face = "bold",
             size = 15,
             itemsizing = "constant"
-          ))
+            )
+          )
       },
       error = function(e) {
         ggplotly(
@@ -900,7 +908,7 @@ server <- function(input, output, session) {
             ggplot(aes(x = long, y = lat)) +
             geom_path(aes(group = group), colour = "black") +
             geom_point(
-              data = (levy_reactive() %>% filter(Year == input$Year2) %>% distinct()),
+              data = (RV$levy_qol %>% filter(Year == input$Year2) %>% distinct()),
               aes(
                 x = longitude,
                 y = latitude,

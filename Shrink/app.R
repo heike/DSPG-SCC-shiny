@@ -6,6 +6,7 @@ library(tidyr)
 library(dplyr)
 library(rlang)
 library(ggplot2)
+library(ggfittext)
 library(ggthemes)
 library(tidyverse)
 library(maps)
@@ -46,7 +47,6 @@ levy <- levy %>%
          `Child Services Quality` = QOLchildsrv_i14,
          `Senior Services Quality` = QOLseniorsrv_i14)
 
-#levels(levy$CITY.SIZE)
 levy <- levy %>% mutate(
   CITY.SIZE = factor(CITY.SIZE),
   CITY.SIZE = reorder(CITY.SIZE, Population, median, na.rm=TRUE)
@@ -245,9 +245,9 @@ sidebar <- dashboardSidebar(
     
     dropdown(div(id = 'my_numinput', 
                  p("Set the slider range to your desired population values, starting with the first range"),
-                 sliderInput("range1", "Rural:", min=0, max=25000, value=c(0,800), step = 100),
-                 sliderInput("range2", "Rural Plus:", min=0, max=25000, value=c(800, 2500), step = 100),
-                 sliderInput("range3", "Urban Cluster:", min=0, max=25000, value=c(2500, 5000), step = 100),
+                 sliderInput("range1", "Rural:", min=0, max=2500, value=c(0,800), step = 50),
+                 sliderInput("range2", "Rural Plus:", min=0, max=7500, value=c(800, 2500), step = 100),
+                 sliderInput("range3", "Urban Cluster:", min=0, max=20000, value=c(2500, 5000), step = 100),
                  sliderInput("range4", "Nano- and Micropolitan:", min=0, max=25000, value=c(5000, 25000), step = 100)),
                         
              actionButton("action1", "Change Limits"),
@@ -746,11 +746,27 @@ server <- function(input, output, session) {
   # Run JavaScript Code
   runjs(jscode)
   
+  levy_react <- reactive({
+    levy
+  })
+  
+  observe({
+    RV$levy <- levy_react()
+  })
+  
+  levy_qol_react <- reactive({
+    levy_qol
+  })
+  
+  observe({
+    RV$levy_qol <- levy_qol_react()
+  })
+  
   
   levy_sub <- reactive({
     cities <- input$which_cities
     if ("All" %in% cities)
-      cities <- unique(levy$CITY.NAME)
+      cities <- unique(RV$levy$CITY.NAME)
     levy %>% #filter(Tax.Type == "TOTALS") %>%
       filter(CITY.NAME %in% cities)
   })
@@ -797,26 +813,27 @@ server <- function(input, output, session) {
   
   observe({
     updateSliderInput(session, "range2", value = c(input$range1[2], 2500),
-                      min = input$range1[2], max = 25000, step = 100)})
+                      min = input$range1[2], max = 7500, step = 100)})
   
   observe({
     updateSliderInput(session, "range3", value = c(input$range2[2], 5000),
-                      min = input$range2[2], max = 25000, step = 100)})
+                      min = input$range2[2], max = 20000, step = 100)})
   
   observe({
     updateSliderInput(session, "range4", value = c(input$range3[2], 25000),
                       min = input$range3[2], max = 25000, step = 100)})  
   
-  levy_react <- reactive({
-    levy_qol
-  })
   
-  observe({
-    RV$levy_qol <- levy_react()
-  })
   
   observeEvent(input$action1, {
-    RV$levy_qol <- levy_qol %>% mutate(CITY.SIZE = ifelse(Population < input$range1[2], 
+    
+    RV$levy <- RV$levy %>% select(-c(Group.Per.Capita.Revenue,
+                                     Group.Tax.Valuation,
+                                     Group.Per.Capita.Valuation,
+                                     Group.Levy.Rate))
+    
+    
+    RV$levy <- RV$levy %>% mutate(CITY.SIZE = ifelse(Population < input$range1[2], 
                                      "RURAL", 
                                      ifelse((Population < input$range2[2] & Population >= input$range2[1]),
                                             "RURAL PLUS", 
@@ -824,43 +841,42 @@ server <- function(input, output, session) {
                                                    "URBAN CLUSTER",
                                                    "NANO- and MICROPOLITAN"))))
     
-    
-    RV$levy_qol <- RV$levy_qol %>%
-      mutate(Prop.Tax.Revenue = (Adjusted.Amount / 1000) * Levy.Rate)
-    
-    ## Per Capita Revenue already in set
-    
-    levy_groups_PCRev <- RV$levy_qol %>%
+    levy_groups_PCRev <- RV$levy %>%
       filter(!is.na(Levy.Rate)) %>%
       group_by(CITY.SIZE, Year) %>%
       summarise(Group.Population = sum(Population),
                 Group.Per.Capita.Revenue = sum(Per.Capita.Revenue) / Group.Population) %>%
       select(CITY.SIZE, Year, Group.Per.Capita.Revenue)
     
-    RV$levy_qol <- left_join(RV$levy_qol, levy_groups_PCRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+    RV$levy <- left_join(RV$levy, levy_groups_PCRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
     
-    levy_groups_TRRev <- RV$levy_qol %>%
+    levy_groups_TRRev <- RV$levy %>%
       group_by(CITY.SIZE, Year) %>%
       summarise(Group.Population = sum(Population),
                 Group.Tax.Valuation = sum(Adjusted.Amount),
                 Group.Per.Capita.Valuation = Group.Tax.Valuation / Group.Population) %>%
-      select(-3) 
+      select(CITY.SIZE, Year, Group.Tax.Valuation, Group.Per.Capita.Valuation) 
     
-    RV$levy_qol <- left_join(RV$levy_qol, levy_groups_TRRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+    RV$levy <- left_join(RV$levy, levy_groups_TRRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
     
-    levy_groups_PGLR <- RV$levy_qol %>%
+    levy_groups_PGLR <- RV$levy %>%
       filter(!is.na(Levy.Rate)) %>%
       group_by(CITY.SIZE, Year) %>%
       summarise(Group.Levy.Rate = 1000 * sum(Prop.Tax.Revenue) / sum(Adjusted.Amount))
     
-    RV$levy_qol <- left_join(RV$levy_qol, levy_groups_PGLR, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+    RV$levy <- left_join(RV$levy, levy_groups_PGLR, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
     
-    RV$levy_qol <- RV$levy_qol %>%
+    RV$levy <- RV$levy %>%
       mutate(Fiscal.Capacity = (Per.Capita.Valuation / Group.Per.Capita.Valuation) * 100)
     
-    RV$levy_qol %>%
+    RV$levy %>%
       mutate(Fiscal.Effort = (Per.Capita.Revenue / (Per.Capita.Valuation * Group.Levy.Rate)) * 100000)
     
+    
+    RV$levy_qol <- RV$levy %>%
+      select(Year, CITY.NAME, longitude, latitude, all_of(fills), all_of(metrics)) %>%
+      filter(Year >= 2010,
+             Year <= 2016)
   }, ignoreNULL = TRUE)
   
   
@@ -944,7 +960,7 @@ server <- function(input, output, session) {
   # City Comparison  ---------------------------------------------------------
   
   output$ComparePlot <- renderPlot({
-    levy %>%
+    RV$levy %>%
       filter(Year == input$Year,
              CITY.NAME == input$City1 |
                CITY.NAME == input$City2) %>%
@@ -957,13 +973,20 @@ server <- function(input, output, session) {
       scale_fill_brewer(palette = "Pastel1") +
       xlab("City") +
       ylab("Index Value") +
-      theme_stata()
+      theme_stata() +
+      geom_text(aes(x = CITY.NAME, 
+                    y = Value + 5,
+                    label = format(Value,
+                                   scientific = FALSE,
+                                   digits = 3)),
+                position = position_dodge(.9),
+                size = 6)
   })
   
   # Drive Time Analysis -------------------------------------
   
   output$LevyMapPlotly <- renderPlotly({
-    gg1 <- levy %>%
+    gg1 <- RV$levy %>%
       mutate(`Commute ≥ 50 mins` = min50 >= 50) %>%
       filter(Year == 2020) %>%
       ggplot(aes(x = longitude, y = latitude)) +
@@ -989,7 +1012,7 @@ server <- function(input, output, session) {
       ggthemes::theme_map() +
       theme(legend.position = "none")
     
-    gg2 <- levy %>%
+    gg2 <- RV$levy %>%
       mutate(`Commute ≥ 50 mins` = hub_min >= 50) %>%
       filter(Year == 2020) %>%
       ggplot(aes(x = longitude, y = latitude)) +

@@ -52,6 +52,14 @@ levy <- levy %>% mutate(
 )
 
 
+all_iowa <- read.csv("Current Data/levy-rates-2006-2020_ALL_IOWA.csv") %>%
+  filter(Levy.Rate > 0) %>%
+  mutate(Prop.Tax.Revenue = (Adjusted.Amount * Levy.Rate) / 1000,
+         Per.Capita.Revenue = Prop.Tax.Revenue / Population,
+         Per.Capita.Valuation = Adjusted.Amount / Population)
+  
+
+
 # Dotplot of Iowa ----------------------------------------------------
 
 ## set the rows to be used as metrics - all continuous numerical values; will end up being the size of dots
@@ -254,8 +262,17 @@ sidebar <- dashboardSidebar(
              tags$style(type = "text/css", "#my_numinput {color: black}"),
              width = 1000,
              animate = TRUE,
-             label = "Change City Pop Limits")
-        
+             label = "Change City Pop Limits"),
+    
+    tabsetPanel(
+      selectInput(
+        inputId = "fiscalButtons",
+        label = h4("Choose Grouping for Fiscal Metrics"),
+        choices = list("Shrink Smart Cities" = "shrink",
+                    "All of Iowa" = "all")
+        )
+      ),
+    actionButton("action2", "Choose Grouping")
     )
   )
 
@@ -761,6 +778,14 @@ server <- function(input, output, session) {
     RV$levy_qol <- levy_qol_react()
   })
   
+  all_iowa_react <- reactive({
+    all_iowa
+  })
+  
+  observe({
+    RV$all_iowa <- all_iowa_react()
+  })
+  
   
   levy_sub <- reactive({
     cities <- input$which_cities
@@ -868,7 +893,7 @@ server <- function(input, output, session) {
     RV$levy <- RV$levy %>%
       mutate(Fiscal.Capacity = (Per.Capita.Valuation / Group.Per.Capita.Valuation) * 100)
     
-    RV$levy %>%
+    RV$levy <- RV$levy %>%
       mutate(Fiscal.Effort = (Per.Capita.Revenue / (Per.Capita.Valuation * Group.Levy.Rate)) * 100000)
     
     
@@ -877,6 +902,116 @@ server <- function(input, output, session) {
       filter(Year >= 2010,
              Year <= 2016)
   }, ignoreNULL = TRUE)
+  
+  
+  observeEvent(input$action2, {
+    ## reset the dataset
+    RV$levy <- RV$levy %>%
+      select(-c(Fiscal.Capacity,
+                Fiscal.Effort))
+    
+    
+    
+    ## if we just want the Shrink-Smart Cities, run our normal code
+    if (input$fiscalButtons == "shrink") {
+      ## remove the group columns to prevent any merge failures
+      RV$levy <- RV$levy %>% 
+        select(-c(Group.Per.Capita.Revenue,
+                  Group.Tax.Valuation,
+                  Group.Per.Capita.Valuation,
+                  Group.Levy.Rate))
+      
+      levy_groups_PCRev <- RV$levy %>%
+        filter(!is.na(Levy.Rate)) %>%
+        group_by(CITY.SIZE, Year) %>%
+        summarise(Group.Population = sum(Population),
+                  Group.Per.Capita.Revenue = sum(Per.Capita.Revenue) / Group.Population) %>%
+        select(CITY.SIZE, Year, Group.Per.Capita.Revenue)
+      
+      RV$levy <- left_join(RV$levy, levy_groups_PCRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+      
+      levy_groups_TRRev <- RV$levy %>%
+        group_by(CITY.SIZE, Year) %>%
+        summarise(Group.Population = sum(Population),
+                  Group.Tax.Valuation = sum(Adjusted.Amount),
+                  Group.Per.Capita.Valuation = Group.Tax.Valuation / Group.Population) %>%
+        select(CITY.SIZE, Year, Group.Tax.Valuation, Group.Per.Capita.Valuation) 
+      
+      RV$levy <- left_join(RV$levy, levy_groups_TRRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+      
+      levy_groups_PGLR <- RV$levy %>%
+        filter(!is.na(Levy.Rate)) %>%
+        group_by(CITY.SIZE, Year) %>%
+        summarise(Group.Levy.Rate = 1000 * sum(Prop.Tax.Revenue) / sum(Adjusted.Amount))
+      
+      RV$levy <- left_join(RV$levy, levy_groups_PGLR, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+      
+      RV$levy <- RV$levy %>%
+        mutate(Fiscal.Capacity = (Per.Capita.Valuation / Group.Per.Capita.Valuation) * 100)
+      
+      RV$levy <- RV$levy %>%
+        mutate(Fiscal.Effort = (Per.Capita.Revenue / (Per.Capita.Valuation * Group.Levy.Rate)) * 100000)
+      
+      
+      RV$levy_qol <- RV$levy %>%
+        select(Year, CITY.NAME, longitude, latitude, all_of(fills), all_of(metrics)) %>%
+        filter(Year >= 2010,
+               Year <= 2016)
+    }
+    
+    
+    
+    
+    
+    ## if we want the fiscal metrics by all cities in Iowa, run the code on the all-iowa set and merge
+    if (input$fiscalButtons == "all") {
+      ## select only the base columns of all-iowa set to prevent merge failures
+      RV$all_iowa <- RV$all_iowa %>% 
+        select(CITY.NAME, Year, Population, Levy.Rate, Adjusted.Amount, CITY.SIZE, Prop.Tax.Revenue, Per.Capita.Revenue, Per.Capita.Valuation)
+      
+      levy_groups_PCRev <- RV$all_iowa %>%
+        filter(!is.na(Levy.Rate)) %>%
+        group_by(CITY.SIZE, Year) %>%
+        summarise(Group.Population = sum(Population),
+                  Group.Per.Capita.Revenue = sum(Per.Capita.Revenue) / Group.Population) %>%
+        select(CITY.SIZE, Year, Group.Per.Capita.Revenue)
+      
+      RV$all_iowa <- left_join(RV$all_iowa, levy_groups_PCRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+      
+      levy_groups_TRRev <- RV$all_iowa %>%
+        group_by(CITY.SIZE, Year) %>%
+        summarise(Group.Population = sum(Population),
+                  Group.Tax.Valuation = sum(Adjusted.Amount),
+                  Group.Per.Capita.Valuation = Group.Tax.Valuation / Group.Population) %>%
+        select(CITY.SIZE, Year, Group.Tax.Valuation, Group.Per.Capita.Valuation) 
+      
+      RV$all_iowa <- left_join(RV$all_iowa, levy_groups_TRRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+      
+      levy_groups_PGLR <- RV$all_iowa %>%
+        filter(!is.na(Levy.Rate)) %>%
+        group_by(CITY.SIZE, Year) %>%
+        summarise(Group.Levy.Rate = 1000 * sum(Prop.Tax.Revenue) / sum(Adjusted.Amount))
+      
+      RV$all_iowa <- left_join(RV$all_iowa, levy_groups_PGLR, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+      
+      RV$all_iowa <- RV$all_iowa %>%
+        mutate(Fiscal.Capacity = (Per.Capita.Valuation / Group.Per.Capita.Valuation) * 100)
+      
+      RV$all_iowa <- RV$all_iowa %>%
+        mutate(Fiscal.Effort = (Per.Capita.Revenue / (Per.Capita.Valuation * Group.Levy.Rate)) * 100000)
+      
+      ## merge levy with all_iowa for only fiscal cap and fiscal eff
+      RV$levy <- RV$levy %>%
+        left_join(RV$all_iowa %>% select(CITY.NAME, Year, Fiscal.Capacity, Fiscal.Effort), 
+                  by = c("CITY.NAME" = "CITY.NAME", "Year" = "Year"))
+      
+      RV$levy_qol <- RV$levy %>%
+        select(Year, CITY.NAME, longitude, latitude, all_of(fills), all_of(metrics)) %>%
+        filter(Year >= 2010,
+               Year <= 2016)
+      
+    }
+  })
   
   
   

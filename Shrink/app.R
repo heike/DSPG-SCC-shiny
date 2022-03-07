@@ -57,7 +57,6 @@ all_iowa <- read.csv("Current Data/levy-rates-2006-2020_ALL_IOWA.csv") %>%
   mutate(Prop.Tax.Revenue = (Adjusted.Amount * Levy.Rate) / 1000,
          Per.Capita.Revenue = Prop.Tax.Revenue / Population,
          Per.Capita.Valuation = Adjusted.Amount / Population)
-  
 
 
 # Dotplot of Iowa ----------------------------------------------------
@@ -199,6 +198,30 @@ header <- dashboardHeader(title = tags$a(href='http://ruralshrinksmart.org',
 # Sidebar -----------------------------------------------------------------
 
 sidebar <- dashboardSidebar(
+  ### sidebar dropdown
+  
+  dropdown(div(id = 'my_numinput', 
+               h4(HTML("<b>Set the slider range to your desired population values, starting with the first range:</b>")),
+               sliderInput("range1", "Rural:", min=0, max=2500, value=c(0,800), step = 50),
+               sliderInput("range2", "Rural Plus:", min=0, max=7500, value=c(800, 2500), step = 100),
+               sliderInput("range3", "Urban Cluster:", min=0, max=20000, value=c(2500, 5000), step = 100),
+               sliderInput("range4", "Nano- and Micropolitan:", min=0, max=25000, value=c(5000, 25000), step = 100),
+               selectInput(
+                 inputId = "fiscalButtons",
+                 label = h4(HTML("<b>Choose Grouping for Fiscal Metrics</b>")),
+                 choices = list("Shrink Smart Cities" = "shrink",
+                                "All of Iowa" = "all")
+               )),
+           
+           actionButton("action1", strong("APPLY CHANGES")),
+           
+           tags$style(type = "text/css", "#my_numinput {color: black}"),
+           width = 750,
+           animate = TRUE,
+           label = "Options",
+           icon = icon("cog", lib = "glyphicon"),
+           size = "sm"),
+  
   sidebarMenu(
     id = "tabs",
     menuItem(
@@ -245,34 +268,7 @@ sidebar <- dashboardSidebar(
       tabName = "team",
       text = "The Shrink Smart Team",
       icon = icon("user-friends")
-    ),
-    
-    
-    ### sidebar dropdown
-    
-    dropdown(div(id = 'my_numinput', 
-                 p("Set the slider range to your desired population values, starting with the first range"),
-                 sliderInput("range1", "Rural:", min=0, max=2500, value=c(0,800), step = 50),
-                 sliderInput("range2", "Rural Plus:", min=0, max=7500, value=c(800, 2500), step = 100),
-                 sliderInput("range3", "Urban Cluster:", min=0, max=20000, value=c(2500, 5000), step = 100),
-                 sliderInput("range4", "Nano- and Micropolitan:", min=0, max=25000, value=c(5000, 25000), step = 100)),
-                        
-             actionButton("action1", "Change Limits"),
-             
-             tags$style(type = "text/css", "#my_numinput {color: black}"),
-             width = 1000,
-             animate = TRUE,
-             label = "Change City Pop Limits"),
-    
-    tabsetPanel(
-      selectInput(
-        inputId = "fiscalButtons",
-        label = h4("Choose Grouping for Fiscal Metrics"),
-        choices = list("Shrink Smart Cities" = "shrink",
-                    "All of Iowa" = "all")
-        )
-      ),
-    actionButton("action2", "Choose Grouping")
+      )
     )
   )
 
@@ -851,12 +847,11 @@ server <- function(input, output, session) {
   
   observeEvent(input$action1, {
     
-    RV$levy <- RV$levy %>% select(-c(Group.Per.Capita.Revenue,
-                                     Group.Tax.Valuation,
-                                     Group.Per.Capita.Valuation,
-                                     Group.Levy.Rate))
+    ## Remove Fiscal Capacity and Effort in Levy Set as it will be changed with the rest of this code
+    RV$levy <- RV$levy %>%
+      select(-c(Fiscal.Effort, Fiscal.Capacity))
     
-    
+    ## First change Levy ranges
     RV$levy <- RV$levy %>% mutate(CITY.SIZE = ifelse(Population < input$range1[2], 
                                      "RURAL", 
                                      ifelse((Population < input$range2[2] & Population >= input$range2[1]),
@@ -865,61 +860,22 @@ server <- function(input, output, session) {
                                                    "URBAN CLUSTER",
                                                    "NANO- and MICROPOLITAN"))))
     
-    levy_groups_PCRev <- RV$levy %>%
-      filter(!is.na(Levy.Rate)) %>%
-      group_by(CITY.SIZE, Year) %>%
-      summarise(Group.Population = sum(Population),
-                Group.Per.Capita.Revenue = sum(Per.Capita.Revenue) / Group.Population) %>%
-      select(CITY.SIZE, Year, Group.Per.Capita.Revenue)
+    ## Now change All-iowa ranges
+    RV$all_iowa <- RV$all_iowa %>% mutate(CITY.SIZE = ifelse(Population < input$range1[2], 
+                                                     "RURAL", 
+                                                     ifelse((Population < input$range2[2] & Population >= input$range2[1]),
+                                                            "RURAL PLUS", 
+                                                            ifelse((Population < input$range3[2] & Population >= input$range3[1]), 
+                                                                   "URBAN CLUSTER",
+                                                                   "NANO- and MICROPOLITAN"))))
     
-    RV$levy <- left_join(RV$levy, levy_groups_PCRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
+    ## Now, depending on the SelectInput edit the fiscal metrics accordingly
     
-    levy_groups_TRRev <- RV$levy %>%
-      group_by(CITY.SIZE, Year) %>%
-      summarise(Group.Population = sum(Population),
-                Group.Tax.Valuation = sum(Adjusted.Amount),
-                Group.Per.Capita.Valuation = Group.Tax.Valuation / Group.Population) %>%
-      select(CITY.SIZE, Year, Group.Tax.Valuation, Group.Per.Capita.Valuation) 
-    
-    RV$levy <- left_join(RV$levy, levy_groups_TRRev, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
-    
-    levy_groups_PGLR <- RV$levy %>%
-      filter(!is.na(Levy.Rate)) %>%
-      group_by(CITY.SIZE, Year) %>%
-      summarise(Group.Levy.Rate = 1000 * sum(Prop.Tax.Revenue) / sum(Adjusted.Amount))
-    
-    RV$levy <- left_join(RV$levy, levy_groups_PGLR, by = c("Year" = "Year", "CITY.SIZE" = "CITY.SIZE"))
-    
-    RV$levy <- RV$levy %>%
-      mutate(Fiscal.Capacity = (Per.Capita.Valuation / Group.Per.Capita.Valuation) * 100)
-    
-    RV$levy <- RV$levy %>%
-      mutate(Fiscal.Effort = (Per.Capita.Revenue / (Per.Capita.Valuation * Group.Levy.Rate)) * 100000)
-    
-    
-    RV$levy_qol <- RV$levy %>%
-      select(Year, CITY.NAME, longitude, latitude, all_of(fills), all_of(metrics)) %>%
-      filter(Year >= 2010,
-             Year <= 2016)
-  }, ignoreNULL = TRUE)
-  
-  
-  observeEvent(input$action2, {
-    ## reset the dataset
-    RV$levy <- RV$levy %>%
-      select(-c(Fiscal.Capacity,
-                Fiscal.Effort))
-    
-    
-    
-    ## if we just want the Shrink-Smart Cities, run our normal code
     if (input$fiscalButtons == "shrink") {
-      ## remove the group columns to prevent any merge failures
-      RV$levy <- RV$levy %>% 
-        select(-c(Group.Per.Capita.Revenue,
-                  Group.Tax.Valuation,
-                  Group.Per.Capita.Valuation,
-                  Group.Levy.Rate))
+      RV$levy <- RV$levy %>% select(-c(Group.Per.Capita.Revenue,
+                                       Group.Tax.Valuation,
+                                       Group.Per.Capita.Valuation,
+                                       Group.Levy.Rate))
       
       levy_groups_PCRev <- RV$levy %>%
         filter(!is.na(Levy.Rate)) %>%
@@ -951,23 +907,18 @@ server <- function(input, output, session) {
       
       RV$levy <- RV$levy %>%
         mutate(Fiscal.Effort = (Per.Capita.Revenue / (Per.Capita.Valuation * Group.Levy.Rate)) * 100000)
-      
-      
-      RV$levy_qol <- RV$levy %>%
-        select(Year, CITY.NAME, longitude, latitude, all_of(fills), all_of(metrics)) %>%
-        filter(Year >= 2010,
-               Year <= 2016)
     }
     
-    
-    
-    
-    
-    ## if we want the fiscal metrics by all cities in Iowa, run the code on the all-iowa set and merge
     if (input$fiscalButtons == "all") {
-      ## select only the base columns of all-iowa set to prevent merge failures
-      RV$all_iowa <- RV$all_iowa %>% 
-        select(CITY.NAME, Year, Population, Levy.Rate, Adjusted.Amount, CITY.SIZE, Prop.Tax.Revenue, Per.Capita.Revenue, Per.Capita.Valuation)
+      RV$all_iowa <- RV$all_iowa %>% select(CITY.NAME, 
+                                            Year, 
+                                            Population, 
+                                            Levy.Rate,
+                                            Adjusted.Amount, 
+                                            CITY.SIZE, 
+                                            Prop.Tax.Revenue, 
+                                            Per.Capita.Revenue, 
+                                            Per.Capita.Valuation)
       
       levy_groups_PCRev <- RV$all_iowa %>%
         filter(!is.na(Levy.Rate)) %>%
@@ -1004,14 +955,14 @@ server <- function(input, output, session) {
       RV$levy <- RV$levy %>%
         left_join(RV$all_iowa %>% select(CITY.NAME, Year, Fiscal.Capacity, Fiscal.Effort), 
                   by = c("CITY.NAME" = "CITY.NAME", "Year" = "Year"))
-      
-      RV$levy_qol <- RV$levy %>%
-        select(Year, CITY.NAME, longitude, latitude, all_of(fills), all_of(metrics)) %>%
-        filter(Year >= 2010,
-               Year <= 2016)
-      
     }
-  })
+    
+    
+    RV$levy_qol <- RV$levy %>%
+      select(Year, CITY.NAME, longitude, latitude, all_of(fills), all_of(metrics)) %>%
+      filter(Year >= 2010,
+             Year <= 2016)
+  }, ignoreNULL = TRUE)
   
   
   

@@ -338,6 +338,7 @@ body <- dashboardBody(
                 p(
                   "The data used to create our ecosystem has been through the use of publicly available data. Sources include:"
                 ),
+                
                 HTML("<ul>
                         <li><a href='https://console.developers.google.com/apis'>Google Developer API</a></li>
                         <li><a href='https://dom.iowa.gov/'>Iowa Department of Management</a></li>
@@ -349,10 +350,14 @@ body <- dashboardBody(
                 ),
                 h2("Sponsor"),
                 p(
-                  "This project is sponsored by Kimberly Zarecor with ISU Smart & Connected Communities."
+                  "This project is sponsored by Kimberly Zarecor with ISU Smart & Connected Communities and the National Science Foundation."
+                  ),
+                img(src = '1024px-NSF_logo.png',
+                    width = "5%",
+                    align = "right")
                 )
               )
-            )),
+            ),
     
     # Dotplot of Iowa ---------------------------------------------------------
     
@@ -741,8 +746,11 @@ body <- dashboardBody(
                   )),
                 h2("Acknowledgements"),
                 p(
-                  ""
-                )
+                  "This material is based upon work supported by the National Science Foundation under Grant Number #1736718. Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation."
+                ),
+                img(src = '1024px-NSF_logo.png',
+                    width = "5%",
+                    align = "right")
               )
             ))
   )
@@ -782,17 +790,35 @@ server <- function(input, output, session) {
     RV$all_iowa <- all_iowa_react()
   })
   
+  ds_react <- reactive({
+    ds
+  })
+  
+  observe({
+    RV$ds <- ds_react()
+  })
+  
   
   levy_sub <- reactive({
     cities <- input$which_cities
     if ("All" %in% cities)
       cities <- unique(RV$levy$CITY.NAME)
-    levy %>% #filter(Tax.Type == "TOTALS") %>%
+    RV$levy %>% #filter(Tax.Type == "TOTALS") %>%
       filter(CITY.NAME %in% cities)
   })
-  y <- reactive({
-    levy_sub()[, input$which_variable]
+  
+  observe({
+    RV$levy_sub <- levy_sub
   })
+  
+  y <- reactive({
+    RV$levy_sub()[, input$which_variable]
+  })
+  
+  observe({
+    RV$y <- y
+  })
+  
   
   # Population Loss in Rural Iowa ---------------------------------------------------------
   
@@ -957,11 +983,21 @@ server <- function(input, output, session) {
                   by = c("CITY.NAME" = "CITY.NAME", "Year" = "Year"))
     }
     
-    
+    ## create the new levy_qol set from the reactive levy set
     RV$levy_qol <- RV$levy %>%
       select(Year, CITY.NAME, longitude, latitude, all_of(fills), all_of(metrics)) %>%
       filter(Year >= 2010,
              Year <= 2016)
+    
+    ## join new new data onto the ds set from the reactive levy set
+    RV$ds <- RV$ds %>%
+      select(-c(Fiscal.Capacity,
+                Fiscal.Effort,
+                CITY.SIZE)) %>%
+      left_join(RV$levy %>% select(CITY.NAME, Year, CITY.SIZE, Fiscal.Capacity, Fiscal.Effort), 
+                by = c("CITY.NAME" = "CITY.NAME",
+                       "Year" = "Year"))
+      
   }, ignoreNULL = TRUE)
   
   
@@ -1033,8 +1069,8 @@ server <- function(input, output, session) {
   # Levy Plot ---------------------------------------------
   
   output$plotly <- renderPlotly({
-    levy_sub() %>%
-      ggplot(aes(x = Year, y = y())) +
+    RV$levy_sub() %>%
+      ggplot(aes(x = Year, y = RV$y())) +
       geom_line(aes(group = CITY.NAME)) +
       facet_grid(CITY.SIZE ~ ., scales = "free_y") +
       ylab(input$which_variable) +
@@ -1250,9 +1286,8 @@ server <- function(input, output, session) {
   
   # Quality of Life by Metrics ----------------------------------------------
   output$qolCorrelation <- renderText({
-    subds <- ds %>%
-      filter(Year == input$Year3,
-             Fiscal.Capacity < 500)
+    subds <- RV$ds %>%
+      filter(Year == input$Year3)
     correlation <- cor(
       x = subds %>% select(input$fiscal),
       y = subds %>% select(input$qol),
@@ -1267,7 +1302,7 @@ server <- function(input, output, session) {
   
   output$scatPlot <- renderPlotly({
     ggplotly(
-      ds %>%
+      RV$ds %>%
         filter(Year == input$Year3,
                Fiscal.Capacity < 500) %>%
         ggplot(

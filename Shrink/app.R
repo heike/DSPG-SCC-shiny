@@ -886,6 +886,8 @@ server <- function(input, output, session) {
                                                    "URBAN CLUSTER",
                                                    "NANO- and MICROPOLITAN"))))
     
+    RV$levy$CITY.SIZE <- factor(RV$levy$CITY.SIZE, levels = c("RURAL", "RURAL PLUS", "URBAN CLUSTER", "NANO- and MICROPOLITAN"))
+    
     ## Now change All-iowa ranges
     RV$all_iowa <- RV$all_iowa %>% mutate(CITY.SIZE = ifelse(Population < input$range1[2], 
                                                      "RURAL", 
@@ -894,6 +896,8 @@ server <- function(input, output, session) {
                                                             ifelse((Population < input$range3[2] & Population >= input$range3[1]), 
                                                                    "URBAN CLUSTER",
                                                                    "NANO- and MICROPOLITAN"))))
+    
+    RV$all_iowa$CITY.SIZE <- factor(RV$all_iowa$CITY.SIZE, levels = c("RURAL", "RURAL PLUS", "URBAN CLUSTER", "NANO- and MICROPOLITAN"))
     
     ## Now, depending on the SelectInput edit the fiscal metrics accordingly
     

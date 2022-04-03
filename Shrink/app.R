@@ -214,9 +214,10 @@ sidebar <- dashboardSidebar(
                )),
            
            actionButton("action1", strong("APPLY CHANGES")),
+           actionButton("actionReset", strong("RESET LIMITS TO DEFAULT")),
            
            tags$style(type = "text/css", "#my_numinput {color: black}"),
-           width = 750,
+           width = 450,
            animate = TRUE,
            label = "Options",
            icon = icon("cog", lib = "glyphicon"),
@@ -867,9 +868,26 @@ server <- function(input, output, session) {
   
   observe({
     updateSliderInput(session, "range4", value = c(input$range3[2], 25000),
-                      min = input$range3[2], max = 25000, step = 100)})  
+                      min = input$range3[2], max = 25000, step = 100)})
   
+  # Reset sliders button ----------------------------------------------
   
+  observeEvent(input$actionReset, {
+    updateSliderInput(session, "range1", value = c(0, 800),
+                      min = 0, max = 2500, step = 50)
+    
+    updateSliderInput(session, "range2", value = c(800, 2500),
+                      min = 800, max = 7500, step = 100)
+    
+    updateSliderInput(session, "range3", value = c(2500, 5000),
+                      min = 2500, max = 20000, step = 100)
+    
+    updateSliderInput(session, "range4", value = c(5000, 25000),
+                      min = 5000, max = 25000, step = 100)
+    
+  })
+  
+  # Apply changes button ---------------------------------------------
   
   observeEvent(input$action1, {
     

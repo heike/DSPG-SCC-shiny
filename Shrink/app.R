@@ -211,7 +211,11 @@ sidebar <- dashboardSidebar(
                  label = h4(HTML("<b>Choose Grouping for Fiscal Metrics</b>")),
                  choices = list("Shrink Smart Cities" = "shrink",
                                 "All of Iowa" = "all")
-               )),
+               ),
+               selectInput(inputId = "chooseCitites",
+                           label = h4(HTML("<b>Choose Cities to Highlight</b>")),
+                           choices = c(unique(levy$CITY.NAME)),
+                           multiple = TRUE, selected = "ALTOONA")),
            
            actionButton("action1", strong("APPLY CHANGES")),
            actionButton("actionReset", strong("RESET LIMITS TO DEFAULT")),
@@ -820,6 +824,14 @@ server <- function(input, output, session) {
     RV$y <- y
   })
   
+  myTest <- reactive({
+    RV$ds()[RV$ds()$CITY.NAME %in% input$chooseCities, ] %>% filter(Year = input$Year3)
+  })
+  
+  observe({
+    RV$myTest <- myTest
+  })
+  
   
   # Population Loss in Rural Iowa ---------------------------------------------------------
   
@@ -1019,7 +1031,6 @@ server <- function(input, output, session) {
       left_join(RV$levy %>% select(CITY.NAME, Year, CITY.SIZE, Fiscal.Capacity, Fiscal.Effort), 
                 by = c("CITY.NAME" = "CITY.NAME",
                        "Year" = "Year"))
-      
   }, ignoreNULL = TRUE)
   
   
@@ -1322,11 +1333,13 @@ server <- function(input, output, session) {
     )
   })
   
+  
+  
+  
   output$scatPlot <- renderPlotly({
     ggplotly(
       RV$ds %>%
-        filter(Year == input$Year3,
-               Fiscal.Capacity < 500) %>%
+        filter(Year == input$Year3) %>%
         ggplot(
           aes(
             x = !!input$fiscal,
@@ -1336,6 +1349,11 @@ server <- function(input, output, session) {
           )
         ) +
         geom_point() +
+        #geom_point(data = RV$myTest, 
+        #           aes(x = !!input$fiscal,
+        #               y = !!input$qol,
+        #               shape = 23,
+        #               size = 3)) +
         scale_color_viridis_d(begin = 0, end = 0.8) +
         theme(legend.text = element_text(size = 12)) +
         theme_stata() +

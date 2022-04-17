@@ -212,10 +212,10 @@ sidebar <- dashboardSidebar(
                  choices = list("Shrink Smart Cities" = "shrink",
                                 "All of Iowa" = "all")
                ),
-               selectInput(inputId = "chooseCitites",
+               selectInput(inputId = "chooseCities",
                            label = h4(HTML("<b>Choose Cities to Highlight</b>")),
                            choices = c(unique(levy$CITY.NAME)),
-                           multiple = TRUE, selected = "ALTOONA")),
+                           multiple = TRUE)),
            
            actionButton("action1", strong("APPLY CHANGES")),
            actionButton("actionReset", strong("RESET LIMITS TO DEFAULT")),
@@ -648,9 +648,11 @@ body <- dashboardBody(
                          data = ds[qol_metrics]),
           textOutput("qolCorrelation")
         ),
-        box(plotlyOutput(
-          "scatPlot", width = 800, height = 700
-        ))
+        box(
+          plotlyOutput(
+            "scatPlot", width = 800, height = 700),
+          plotlyOutput(
+            "scatPlot2", width = 800, height = 700))
       )
     ),
     
@@ -825,11 +827,13 @@ server <- function(input, output, session) {
   })
   
   myTest <- reactive({
-    RV$ds()[RV$ds()$CITY.NAME %in% input$chooseCities, ] %>% filter(Year = input$Year3)
+    cities2 <- input$chooseCities
+    RV$ds %>%
+      filter(CITY.NAME %in% cities2)
   })
   
   observe({
-    RV$myTest <- myTest
+    RV$myTest <- myTest()
   })
   
   
@@ -1337,39 +1341,67 @@ server <- function(input, output, session) {
   
   
   output$scatPlot <- renderPlotly({
-    ggplotly(
-      RV$ds %>%
-        filter(Year == input$Year3) %>%
-        ggplot(
-          aes(
-            x = !!input$fiscal,
-            y = !!input$qol,
-            color = CITY.SIZE,
-            text = paste("City:", CITY.NAME)
-          )
-        ) +
-        geom_point() +
-        #geom_point(data = RV$myTest, 
-        #           aes(x = !!input$fiscal,
-        #               y = !!input$qol,
-        #               shape = 23,
-        #               size = 3)) +
-        scale_color_viridis_d(begin = 0, end = 0.8) +
-        theme(legend.text = element_text(size = 12)) +
-        theme_stata() +
-        geom_smooth(
-          aes(group = 1),
-          colour = "grey70",
-          method = "lm",
-          se = FALSE
-        ),
-      tooltip = c("text", "x", "y")
-    ) %>%
-      layout(legend = list(
-        x = -0.25 ,
-        y = 1,
-        face = "bold"
-      ))
+    myds <- RV$myTest %>% filter(Year == input$Year3)
+    
+    
+    if (nrow(myds) == 0) {
+      g <- ggplotly(
+        RV$ds %>%
+          filter(Year == input$Year3) %>%
+          ggplot(
+            aes(
+              x = !!input$fiscal,
+              y = !!input$qol,
+              color = CITY.SIZE,
+              text = paste("City:", CITY.NAME)
+            )
+          ) +
+          geom_point() +
+          scale_color_viridis_d(begin = 0, end = 0.8) +
+          theme(legend.text = element_text(size = 12)) +
+          theme_stata() +
+          geom_smooth(
+            aes(group = 1),
+            colour = "grey70",
+            method = "lm",
+            se = FALSE
+          ),
+        tooltip = c("text", "x", "y")) %>%
+        layout(legend = list(x = -0.25,
+                             y = 1,
+                             face = "bold"))
+    }
+    else{
+      g <- ggplotly(
+        RV$ds %>%
+          filter(Year == input$Year3) %>%
+          ggplot(
+            aes(
+              x = !!input$fiscal,
+              y = !!input$qol,
+              color = CITY.SIZE,
+              text = paste("City:", CITY.NAME)
+            )
+          ) +
+          geom_point() +
+          geom_point(data = myds, aes(x = !!input$fiscal, y = !!input$qol, size = 5), show.legend = F) +
+          scale_color_viridis_d(begin = 0, end = 0.8) +
+          theme(legend.text = element_text(size = 12)) +
+          theme_stata() +
+          scale_alpha(guide = 'none') +
+          geom_smooth(
+            aes(group = 1),
+            colour = "grey70",
+            method = "lm",
+            se = FALSE
+          ),
+        tooltip = c("text", "x", "y")) %>%
+        layout(legend = list(x = -0.25,
+                             y = 1,
+                             face = "bold"))
+    }
+    
+    g
   })
 }
 

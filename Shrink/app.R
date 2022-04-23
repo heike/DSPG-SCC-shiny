@@ -7,6 +7,7 @@ library(dplyr)
 library(rlang)
 library(ggplot2)
 library(ggthemes)
+library(ggrepel)
 library(tidyverse)
 library(maps)
 library(shinyjs)
@@ -214,7 +215,7 @@ sidebar <- dashboardSidebar(
                ),
                selectInput(inputId = "chooseCities",
                            label = h4(HTML("<b>Choose Cities to Highlight</b>")),
-                           choices = c(unique(levy$CITY.NAME)),
+                           choices = c(sort(unique(levy$CITY.NAME))),
                            multiple = TRUE)),
            
            actionButton("action1", strong("APPLY CHANGES")),
@@ -836,6 +837,15 @@ server <- function(input, output, session) {
     RV$myTest <- myTest()
   })
   
+  myQol <- reactive({
+    cities3 <- input$chooseCities
+    RV$levy_qol %>% filter(CITY.NAME %in% cities3)
+  })
+  
+  observe({
+    RV$myQol <- myQol()
+  })
+  
   
   # Population Loss in Rural Iowa ---------------------------------------------------------
   
@@ -1047,60 +1057,139 @@ server <- function(input, output, session) {
   output$mapPlot <- renderPlotly({
     tryCatch(
       expr = {
-        ggplotly(
-          map_data("county") %>% filter(region == "iowa") %>%
-            ggplot(aes(x = long, y = lat)) +
-            geom_path(aes(group = group), colour = "grey30") +
-            geom_point(
-              data = (RV$levy_qol %>% filter(Year == input$Year2) %>% distinct()),
-              aes(
-                x = longitude,
-                y = latitude,
-                size = !!input$metric,
-                color = !!input$fills,
-                text = paste("City:", CITY.NAME, "\n",!!input$fills)
+        if (length(input$chooseCities) == 0) {
+          g <- ggplotly(
+            map_data("county") %>% filter(region == "iowa") %>%
+              ggplot(aes(x = long, y = lat)) +
+              geom_path(aes(group = group), colour = "grey30") +
+              geom_point(
+                data = (RV$levy_qol %>% filter(Year == input$Year2) %>% distinct()),
+                aes(
+                  x = longitude,
+                  y = latitude,
+                  size = !!input$metric,
+                  color = !!input$fills,
+                  text = paste("City:", CITY.NAME, "\n",!!input$fills)
+                )
+              ) +
+              theme_map() +
+              scale_color_viridis_d(begin = 0, end = 0.8) +
+              theme(legend.text = element_text(size = 12),
+                    legend.position = "top"),
+            tooltip = c("text", "size")
+          ) %>%
+            layout(legend = list(
+              x = 0.95 ,
+              y = 0.1,
+              face = "bold",
+              size = 15,
+              itemsizing = "constant"
               )
-            ) +
-            theme_map() +
-            scale_color_viridis_d(begin = 0, end = 0.8) +
-            theme(legend.text = element_text(size = 12),
-                  legend.position = "top"),
-          tooltip = c("text", "size")
-        ) %>%
-          layout(legend = list(
-            x = 0.95 ,
-            y = 0.1,
-            face = "bold",
-            size = 15,
-            itemsizing = "constant"
             )
-          )
+        }
+        
+        else {
+          g <- ggplotly(
+            map_data("county") %>% filter(region == "iowa") %>%
+              ggplot(aes(x = long, y = lat)) +
+              geom_path(aes(group = group), colour = "grey30") +
+              geom_point(
+                data = (RV$levy_qol %>% filter(Year == input$Year2) %>% distinct()),
+                aes(
+                  x = longitude,
+                  y = latitude,
+                  size = !!input$metric,
+                  color = !!input$fills,
+                  text = paste("City:", CITY.NAME, "\n",!!input$fills)
+                )
+              ) +
+              geom_text(data = (RV$levy_qol %>% filter(Year == input$Year2) %>% distinct()),
+                        aes(x = longitude,
+                            y = latitude,
+                            label = ifelse(CITY.NAME %in% input$chooseCities, CITY.NAME, ''),
+                            fontface = "italic",
+                            vjust = 0),
+                        check_overlap = TRUE,
+                        nudge_y = -0.15) + 
+              theme_map() +
+              scale_color_viridis_d(begin = 0, end = 0.8) +
+              theme(legend.text = element_text(size = 12),
+                    legend.position = "top"),
+            tooltip = c("text", "size")
+          ) %>%
+            layout(legend = list(
+              x = 0.95 ,
+              y = 0.1,
+              face = "bold",
+              size = 15,
+              itemsizing = "constant"
+              )
+            )
+        }
+        
       },
       error = function(e) {
-        ggplotly(
-          map_data("county") %>% filter(region == "iowa") %>%
-            ggplot(aes(x = long, y = lat)) +
-            geom_path(aes(group = group), colour = "black") +
-            geom_point(
-              data = (RV$levy_qol %>% filter(Year == input$Year2) %>% distinct()),
-              aes(
-                x = longitude,
-                y = latitude,
-                size = !!input$metric,
-                color = !!input$fills,
-                text = paste("City:", CITY.NAME, "\n",!!input$fills)
-              )
-            ) +
-            theme_map() +
-            scale_color_viridis_c(begin = 0, end = 0.8) +
-            theme(
-              legend.title = element_text(size = 12, face = "bold"),
-              legend.text = element_text(size = 10, face = "bold")
-            ),
-          tooltip = c("text", "size")
-        )
+        if (nrow(mapQol) == 0) {
+          g <- ggplotly(
+            map_data("county") %>% filter(region == "iowa") %>%
+              ggplot(aes(x = long, y = lat)) +
+              geom_path(aes(group = group), colour = "black") +
+              geom_point(
+                data = (RV$levy_qol %>% filter(Year == input$Year2) %>% distinct()),
+                aes(
+                  x = longitude,
+                  y = latitude,
+                  size = !!input$metric,
+                  color = !!input$fills,
+                  text = paste("City:", CITY.NAME, "\n",!!input$fills)
+                )
+              ) +
+              theme_map() +
+              scale_color_viridis_c(begin = 0, end = 0.8) +
+              theme(
+                legend.title = element_text(size = 12, face = "bold"),
+                legend.text = element_text(size = 10, face = "bold")
+              ),
+            tooltip = c("text", "size")
+            )
+        }
+        
+        else {
+          g <- ggplotly(
+            map_data("county") %>% filter(region == "iowa") %>%
+              ggplot(aes(x = long, y = lat)) +
+              geom_path(aes(group = group), colour = "black") +
+              geom_point(
+                data = (RV$levy_qol %>% filter(Year == input$Year2) %>% distinct()),
+                aes(
+                  x = longitude,
+                  y = latitude,
+                  size = !!input$metric,
+                  color = !!input$fills,
+                  text = paste("City:", CITY.NAME, "\n",!!input$fills)
+                )
+              ) +
+              geom_text(data = (RV$levy_qol %>% filter(Year == input$Year2) %>% distinct()),
+                        aes(x = longitude,
+                            y = latitude,
+                            label = ifelse(CITY.NAME %in% input$chooseCities, CITY.NAME, ''),
+                            vjust = 0,
+                            fontface = "bold"),
+                        check_overlap = TRUE,
+                        nudge_y = -0.15) + 
+              theme_map() +
+              scale_color_viridis_c(begin = 0, end = 0.8) +
+              theme(
+                legend.title = element_text(size = 12, face = "bold"),
+                legend.text = element_text(size = 10, face = "bold")
+              ),
+            tooltip = c("text", "size")
+            )
+        }
       }
     )
+    
+    g
   })
   
   # Levy Plot ---------------------------------------------

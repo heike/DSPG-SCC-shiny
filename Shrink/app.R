@@ -228,6 +228,16 @@ sidebar <- dashboardSidebar(
            icon = icon("cog", lib = "glyphicon"),
            size = "sm"),
   
+  dropdown(div(id = 'my_help',
+               h4(HTML("<b>Some plots may be interactive. Use this dropdown as a guide for navigating these plots!</b>")),
+               img(src = 'plotly_help.png')),
+           tags$style(type = "text/css", "#my_help {color: black}"),
+           width = 900,
+           animate = TRUE,
+           label = 'Help',
+           icon = icon("question-sign", lib = "glyphicon"),
+           size = "sm"),
+  
   sidebarMenu(
     id = "tabs",
     menuItem(
@@ -1110,7 +1120,7 @@ server <- function(input, output, session) {
                             fontface = "italic",
                             vjust = 0),
                         check_overlap = TRUE,
-                        nudge_y = -0.15) + 
+                        nudge_y = 0.15) + 
               theme_map() +
               scale_color_viridis_d(begin = 0, end = 0.8) +
               theme(legend.text = element_text(size = 12),
@@ -1129,7 +1139,7 @@ server <- function(input, output, session) {
         
       },
       error = function(e) {
-        if (nrow(mapQol) == 0) {
+        if (length(input$chooseCities) == 0) {
           g <- ggplotly(
             map_data("county") %>% filter(region == "iowa") %>%
               ggplot(aes(x = long, y = lat)) +
@@ -1176,7 +1186,7 @@ server <- function(input, output, session) {
                             vjust = 0,
                             fontface = "bold"),
                         check_overlap = TRUE,
-                        nudge_y = -0.15) + 
+                        nudge_y = 0.15) + 
               theme_map() +
               scale_color_viridis_c(begin = 0, end = 0.8) +
               theme(
@@ -1233,61 +1243,139 @@ server <- function(input, output, session) {
   # Drive Time Analysis -------------------------------------
   
   output$LevyMapPlotly <- renderPlotly({
-    gg1 <- RV$levy %>%
-      mutate(`Commute ≥ 50 mins` = min50 >= 50) %>%
-      filter(Year == 2020) %>%
-      ggplot(aes(x = longitude, y = latitude)) +
-      geom_path(aes(x = long,
-                    y = lat,
-                    group = subregion),
-                data = map_data("county") %>% filter(region == "iowa"),
-                colour = "grey70") +
-      geom_point(aes(size = Population,
-                     colour = MSA),
-                 data = all_cities %>% filter(Population >= 50000),
-                 alpha = 0.4) +
-      geom_point(aes(
-        label = CITY.NAME,
-        colour = MSA,
-        shape = `Commute ≥ 50 mins`
-      ),
-      size = 3) +
-      theme_bw() +
-      scale_size(range = c(5, 10), guide = NULL) +
-      scale_shape_manual("50 min or more Commute", values = c(19, 1)) +
-      scale_colour_brewer("Hub and influence region", palette = "Paired") +
-      ggthemes::theme_map() +
-      theme(legend.position = "none")
     
-    gg2 <- RV$levy %>%
-      mutate(`Commute ≥ 50 mins` = hub_min >= 50) %>%
-      filter(Year == 2020) %>%
-      ggplot(aes(x = longitude, y = latitude)) +
-      geom_path(aes(x = long,
-                    y = lat,
-                    group = subregion),
-                data = map_data("county") %>% filter(region == "iowa"),
-                colour = "grey70") +
-      geom_point(aes(size = Population,
-                     colour = microMSA),
-                 data = all_cities %>% filter(Population >= 10000),
-                 alpha = 0.4) +
-      geom_point(aes(
-        label = CITY.NAME,
-        colour = microMSA,
-        shape = `Commute ≥ 50 mins`
-      ),
-      size = 3) +
-      theme_bw() +
-      scale_size(range = c(5, 10), guide = NULL) +
-      scale_shape_manual("50 min or more Commute", values = c(19, 1)) +
-      ggthemes::theme_map() +
-      theme(legend.position = "none")
+    if (length(input$chooseCities) == 0) {
+      gg1 <- ggplotly(
+        RV$levy %>%
+          mutate(`Commute ≥ 50 mins` = min50 >= 50) %>%
+          filter(Year == 2020) %>%
+          ggplot(aes(x = longitude, y = latitude)) +
+          geom_path(aes(x = long,
+                        y = lat,
+                        group = subregion),
+                    data = map_data("county") %>% filter(region == "iowa"),
+                    colour = "grey70") +
+          geom_point(aes(size = Population,
+                         colour = MSA),
+                     data = all_cities %>% filter(Population >= 50000),
+                     alpha = 0.4) +
+          geom_point(aes(
+            label = CITY.NAME,
+            colour = MSA,
+            shape = `Commute ≥ 50 mins`
+          ),
+          size = 3) +
+          theme_bw() +
+          scale_size(range = c(5, 10), guide = NULL) +
+          scale_shape_manual("50 min or more Commute", values = c(19, 1)) +
+          scale_colour_brewer("Hub and influence region", palette = "Paired") +
+          ggthemes::theme_map() +
+          theme(legend.position = "none")
+      )
+    }
     
-    if (input$msa == "Micropolitan Statistical Area (µMSA)")
-      print(plotly::ggplotly(gg2))
-    else 
-      print(plotly::ggplotly(gg1))
+    else {
+      gg1 <- ggplotly(
+        RV$levy %>%
+          mutate(`Commute ≥ 50 mins` = min50 >= 50) %>%
+          filter(Year == 2020) %>%
+          ggplot(aes(x = longitude, y = latitude)) +
+          geom_path(aes(x = long,
+                        y = lat,
+                        group = subregion),
+                    data = map_data("county") %>% filter(region == "iowa"),
+                    colour = "grey70") +
+          geom_point(data = all_cities %>% filter(Population >= 50000),
+                     aes(size = Population,
+                         colour = MSA),
+                     alpha = 0.4) +
+          geom_point(aes(label = CITY.NAME,
+                         colour = MSA,
+                         shape = `Commute ≥ 50 mins`), 
+                     size = 3) +
+          geom_text(aes(label = ifelse(CITY.NAME %in% input$chooseCities, CITY.NAME, '')),
+                    nudge_y = 0.15,
+                    check_overlap = TRUE) +
+          theme_bw() +
+          scale_size(range = c(5, 10), guide = NULL) +
+          scale_shape_manual("50 min or more Commute", values = c(19, 1)) +
+          scale_colour_brewer("Hub and influence region", palette = "Paired") +
+          ggthemes::theme_map() +
+          theme(legend.position = "none")
+      )
+    }
+    
+    if (length(input$chooseCities) == 0) {
+      gg2 <- ggplotly(
+        RV$levy %>%
+          mutate(`Commute ≥ 50 mins` = hub_min >= 50) %>%
+          filter(Year == 2020) %>%
+          ggplot(aes(x = longitude, y = latitude)) +
+          geom_path(aes(x = long,
+                        y = lat,
+                        group = subregion),
+                    data = map_data("county") %>% filter(region == "iowa"),
+                    colour = "grey70") +
+          geom_point(aes(size = Population,
+                         colour = microMSA),
+                     data = all_cities %>% filter(Population >= 10000),
+                     alpha = 0.4) +
+          geom_point(aes(
+            label = CITY.NAME,
+            colour = microMSA,
+            shape = `Commute ≥ 50 mins`
+          ),
+          size = 3) +
+          theme_bw() +
+          scale_size(range = c(5, 10), guide = NULL) +
+          scale_shape_manual("50 min or more Commute", values = c(19, 1)) +
+          ggthemes::theme_map() +
+          theme(legend.position = "none")
+      )
+    }
+    
+    else {
+      gg2 <- ggplotly(
+        RV$levy %>%
+          mutate(`Commute ≥ 50 mins` = hub_min >= 50) %>%
+          filter(Year == 2020) %>%
+          ggplot(aes(x = longitude, y = latitude)) +
+          geom_path(aes(x = long,
+                        y = lat,
+                        group = subregion),
+                    data = map_data("county") %>% filter(region == "iowa"),
+                    colour = "grey70") +
+          geom_point(aes(size = Population,
+                         colour = microMSA),
+                     data = all_cities %>% filter(Population >= 10000),
+                     alpha = 0.4) +
+          geom_point(aes(
+            label = CITY.NAME,
+            colour = microMSA,
+            shape = `Commute ≥ 50 mins`
+          ),
+          size = 3) +
+          geom_text(aes(label = ifelse(CITY.NAME %in% input$chooseCities, CITY.NAME, '')),
+                    nudge_y = 0.15,
+                    check_overlap = TRUE) +
+          theme_bw() +
+          scale_size(range = c(5, 10), guide = NULL) +
+          scale_shape_manual("50 min or more Commute", values = c(19, 1)) +
+          ggthemes::theme_map() +
+          theme(legend.position = "none")
+      )
+    }
+    
+    
+    
+    if (input$msa == "Micropolitan Statistical Area (µMSA)") {
+      gg3 <- gg2
+    }
+    
+    else {
+      gg3 <- gg1
+    }
+    gg3
   })
   
   # ArcGIS Crop Diversiy Map -----------------------------------------------------
